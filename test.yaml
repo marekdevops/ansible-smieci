@@ -1,0 +1,12 @@
+- name: Check if user exists
+  hosts: all
+  tasks:
+    - name: Check if {{ tech_user }} exists
+      getent:
+        database: passwd
+        key: "{{ tech_user }}"
+      register: user_exists
+
+    - name: Print result
+      debug:
+        var: user_exists
