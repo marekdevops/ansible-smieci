@@ -1,0 +1,31 @@
+import requests
+
+def get_json_from_url(url):
+    try:
+        # Wysyłamy zapytanie GET na podany adres URL
+        response = requests.get(url)
+
+        # Sprawdzamy, czy zapytanie zostało obsłużone poprawnie (kod 200)
+        if response.status_code == 200:
+            # Pobieramy dane w formacie JSON z odpowiedzi
+            data = response.json()
+
+            # Tutaj możesz przetwarzać pobrane dane w formacie JSON
+            # np. zwrócić je jako wynik funkcji, zapisać do pliku, itp.
+
+            return data
+        else:
+            print('Błąd podczas pobierania danych. Kod odpowiedzi:', response.status_code)
+            return None
+
+    except requests.exceptions.RequestException as e:
+        print('Wystąpił błąd podczas komunikacji z serwerem:', e)
+        return None
+
+url = 'https://example.com/data.json'
+json_data = get_json_from_url(url)
+if json_data:
+    print('Dane JSON pobrane z adresu URL:')
+    print(json_data)
+else:
+    print('Nie udało się pobrać danych JSON z adresu URL.')
