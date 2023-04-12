@@ -4,24 +4,22 @@
   become: yes
   tasks:
     - name: Pobierz zainstalowaną wersję pakietu katello
-      yum:
-        list: katello
-        disable_gpg_check: yes
+      command:
+        cmd: yum list installed katello
+        warn: false
       register: yum_output
 
     - name: Pobierz najnowszą dostępną wersję pakietu katello
-      yum:
-        list: katello
-        disable_gpg_check: yes
-        showduplicates: yes
+      command:
+        cmd: yum list available katello --showduplicates | grep katello
+        warn: false
       register: yum_latest_version
 
     - name: Porównaj wersje pakietu
       debug:
-        var: yum_output.packages[0].version != yum_latest_version.packages[0].version
+        var: yum_output.stdout_lines[0].split()[1] != yum_latest_version.stdout_lines[0].split()[1]
       register: result
 
     - name: Wyświetl informację o dostępności aktualizacji
       debug:
         var: result.stdout_lines[0]
-
