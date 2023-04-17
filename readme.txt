@@ -1,25 +1,13 @@
----
-- name: Sprawdź wersję do aktualizacji pakietu katello
-  hosts: your_host
-  become: yes
-  tasks:
-    - name: Pobierz zainstalowaną wersję pakietu katello
-      command:
-        cmd: yum list installed katello
-        warn: false
-      register: yum_output
+import argparse
+import json
 
-    - name: Pobierz najnowszą dostępną wersję pakietu katello
-      command:
-        cmd: yum list available katello --showduplicates | grep katello
-        warn: false
-      register: yum_latest_version
+parser = argparse.ArgumentParser()
+parser.add_argument("exp_date", help="Expiration date to search for")
+args = parser.parse_args()
 
-    - name: Porównaj wersje pakietu
-      debug:
-        var: yum_output.stdout_lines[0].split()[1] != yum_latest_version.stdout_lines[0].split()[1]
-      register: result
+with open("output.json") as f:
+    data = json.load(f)
 
-    - name: Wyświetl informację o dostępności aktualizacji
-      debug:
-        var: result.stdout_lines[0]
+for item in data:
+    if "exp_date" in item and item["exp_date"] == args.exp_date:
+        print(item)
