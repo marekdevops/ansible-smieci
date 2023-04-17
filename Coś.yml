@@ -1,0 +1,15 @@
+import sys
+import getpass
+import os
+
+if len(sys.argv) < 3:
+    print("Użycie: python program.py <Dbuser> <YYYY-MM-DD>")
+    sys.exit(1)
+
+dbuser = sys.argv[1]
+date = sys.argv[2]
+password = getpass.getpass()
+
+cmd = f"curl {dbuser}:{password} http://example.com/{date}"
+os.system(cmd)
+
