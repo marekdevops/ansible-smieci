@@ -1,0 +1,15 @@
+import datetime
+import sys
+
+if len(sys.argv) > 1:
+    input_date = sys.argv[1]
+    try:
+        year, month, day = map(int, input_date.split('-'))
+        start_date = datetime.date(year, month, day)
+        for i in range(7):
+            current_date = start_date + datetime.timedelta(days=i)
+            print(current_date.strftime('%Y-%m-%d'))
+    except ValueError:
+        print("Nieprawidłowy format daty. Użyj formatu YYYY-MM-DD.")
+else:
+    print("Brak argumentu. Podaj datę w formacie YYYY-MM-DD.")
