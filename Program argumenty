@@ -1,0 +1,18 @@
+import sys
+
+def do_something():
+    print("Wykonano funkcję do_something()")
+
+def do_something_else():
+    print("Wykonano funkcję do_something_else()")
+
+if len(sys.argv) > 1:
+    argument = sys.argv[1]
+    if argument == "--do-something":
+        do_something()
+    elif argument == "--do-something-else":
+        do_something_else()
+    else:
+        print("Nieznany argument")
+else:
+    print("Brak argumentu")
