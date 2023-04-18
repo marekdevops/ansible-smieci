@@ -1,0 +1,29 @@
+def option_one():
+    # funkcja obsługująca opcję 1
+    print("Wybrano opcję 1")
+
+def option_two():
+    # funkcja obsługująca opcję 2
+    print("Wybrano opcję 2")
+
+def option_three():
+    # funkcja obsługująca opcję 3
+    print("Wybrano opcję 3")
+
+def show_menu():
+    print("Wybierz opcję:")
+    print("1. Opcja 1")
+    print("2. Opcja 2")
+    print("3. Opcja 3")
+
+while True:
+    show_menu()
+    choice = input("Wybierz cyfrę z zakresu 1-3: ")
+    if choice == "1":
+        option_one()
+    elif choice == "2":
+        option_two()
+    elif choice == "3":
+        option_three()
+    else:
+        print("Nieprawidłowa opcja. Wybierz cyfrę z zakresu 1-3.")
