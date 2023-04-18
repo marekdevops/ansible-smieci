@@ -1,15 +1,19 @@
 import datetime
 import sys
 
-if len(sys.argv) > 1:
-    input_date = sys.argv[1]
+def get_next_seven_days(input_date):
     try:
         year, month, day = map(int, input_date.split('-'))
         start_date = datetime.date(year, month, day)
-        for i in range(7):
-            current_date = start_date + datetime.timedelta(days=i)
-            print(current_date.strftime('%Y-%m-%d'))
+        dates = [start_date + datetime.timedelta(days=i) for i in range(7)]
+        return [date.strftime('%Y-%m-%d') for date in dates]
     except ValueError:
         print("Nieprawidłowy format daty. Użyj formatu YYYY-MM-DD.")
+        return []
+
+if len(sys.argv) > 1:
+    input_date = sys.argv[1]
+    dates = get_next_seven_days(input_date)
+    print(dates)
 else:
     print("Brak argumentu. Podaj datę w formacie YYYY-MM-DD.")
