@@ -1,0 +1,46 @@
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# adres e-mail nadawcy i odbiorcy
+sender_email = "twoj_adres_email@gmail.com"
+receiver_email = "adres_odbiorcy@przyklad.com"
+
+# wiadomość e-mail
+message = MIMEMultipart()
+message['From'] = sender_email
+message['To'] = receiver_email
+message['Subject'] = 'Testowa wiadomość'
+
+# treść wiadomości
+body = "Witaj! To jest testowa wiadomość wysłana za pomocą Pythona."
+message.attach(MIMEText(body, 'plain'))
+
+# serwer SMTP
+smtp_server = "smtp.gmail.com"
+smtp_port = 587
+
+# uwierzytelnienie użytkownika
+username = "twoj_adres_email@gmail.com"
+password = "TwojeHasło"
+
+# wysyłanie wiadomości
+try:
+    # połączenie z serwerem SMTP
+    server = smtplib.SMTP(smtp_server, smtp_port)
+    server.ehlo()
+    server.starttls()
+    server.ehlo()
+    server.login(username, password)
+
+    # wysłanie wiadomości
+    text = message.as_string()
+    server.sendmail(sender_email, receiver_email, text)
+    print("Wiadomość została wysłana!")
+
+except Exception as e:
+    print("Wystąpił błąd podczas wysyłania wiadomości: ", e)
+
+finally:
+    # zamknięcie połączenia z serwerem SMTP
+    server.quit()
