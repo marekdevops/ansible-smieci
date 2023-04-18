@@ -13,25 +13,18 @@ message['To'] = receiver_email
 message['Subject'] = 'Testowa wiadomość'
 
 # treść wiadomości
-body = "Witaj! To jest testowa wiadomość wysłana za pomocą Pythona."
+body = "Witaj! To jest testowa wiadomość wysłana za pomocą Pythona i Postfixa."
 message.attach(MIMEText(body, 'plain'))
 
 # serwer SMTP
-smtp_server = "smtp.gmail.com"
-smtp_port = 587
-
-# uwierzytelnienie użytkownika
-username = "twoj_adres_email@gmail.com"
-password = "TwojeHasło"
+smtp_server = "localhost"
+smtp_port = 25
 
 # wysyłanie wiadomości
 try:
     # połączenie z serwerem SMTP
     server = smtplib.SMTP(smtp_server, smtp_port)
     server.ehlo()
-    server.starttls()
-    server.ehlo()
-    server.login(username, password)
 
     # wysłanie wiadomości
     text = message.as_string()
