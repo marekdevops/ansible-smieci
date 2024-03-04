@@ -1,0 +1,45 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Configure firewalld with all available options
+      ansible.posix.firewalld:
+        service: "{{ item.service | default(omit) }}"
+        port: "{{ item.port | default(omit) }}"
+        rich_rule: "{{ item.rich_rule | default(omit) }}"
+        zone: "{{ item.zone | default('public') }}"
+        state: "{{ item.state }}"
+        immediate: "{{ item.immediate | default(true) }}"
+        permanent: "{{ item.permanent | default(true) }}"
+        source: "{{ item.source | default(omit) }}"
+        interface: "{{ item.interface | default(omit) }}"
+        masquerade: "{{ item.masquerade | default(omit) }}"
+        forward_port: "{{ item.forward_port | default(omit) }}"
+        icmp_block: "{{ item.icmp_block | default(omit) }}"
+        icmp_block_inversion: "{{ item.icmp_block_inversion | default(omit) }}"
+        source_port: "{{ item.source_port | default(omit) }}"
+        offline: "{{ item.offline | default(false) }}"
+        target: "{{ item.target | default(omit) }}"
+      loop: "{{ firewall_rules }}"
+      when: firewall_rules is defined
+      notify: restart firewalld
+
+  handlers:
+    - name: restart firewalld
+      ansible.builtin.service:
+        name: firewalld
+        state: restarted
+
+
+
+firewall_rules:
+  - service: https
+    state: enabled
+    permanent: true
+    immediate: true
+    zone: public
+  - port: 2222/tcp
+    state: enabled
+    permanent: true
+    immediate: true
+    zone: publi
