@@ -1,0 +1,46 @@
+pipeline {
+    agent any
+    parameters {
+        choice(name: 'CHOICE_PARAM', choices: ['null'], description: 'Choose your option')
+        booleanParam(name: 'START', defaultValue: false, description: 'Start the process')
+        booleanParam(name: 'UPLOAD', defaultValue: false, description: 'Upload the file')
+    }
+    stages {
+        stage('Preflight') {
+            steps {
+                script {
+                    // Czytanie pliku test.csv i przypisywanie wartości do zmiennej
+                    def csvContent = readFile('test.csv')
+                    def choices = csvContent.split(',')
+
+                    // Aktualizacja parametru CHOICE_PARAM wartościami z pliku test.csv
+                    properties([
+                        parameters([
+                            choice(name: 'CHOICE_PARAM', choices: choices, description: 'Choose your option'),
+                            booleanParam(name: 'START', defaultValue: params.START, description: 'Start the process'),
+                            booleanParam(name: 'UPLOAD', defaultValue: params.UPLOAD, description: 'Upload the file')
+                        ])
+                    ])
+                }
+            }
+        }
+        stage('Stage 1') {
+            steps {
+                echo 'Executing Stage 1'
+                // Tutaj Twoje kroki dla Stage 1
+            }
+        }
+        stage('Stage 2') {
+            steps {
+                echo 'Executing Stage 2'
+                // Tutaj Twoje kroki dla Stage 2
+            }
+        }
+        stage('Stage 3') {
+            steps {
+                echo 'Executing Stage 3'
+                // Tutaj Twoje kroki dla Stage 3
+            }
+        }
+    }
+}
