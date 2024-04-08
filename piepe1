@@ -1,0 +1,43 @@
+node {
+    def currentBuildParameters = []
+
+    if (currentBuild.rawBuild.getAction(ParametersAction.class)) {
+        currentBuildParameters = currentBuild.rawBuild.getAction(ParametersAction.class).parameters
+    }
+
+    // Odczytanie i przetworzenie pliku CSV
+    def csvContent = readFile('test.csv').trim()
+    def choices = csvContent.split(',').collect { it.trim() }
+    def newChoiceParam = new ChoiceParameterDefinition('CHOICE_PARAM', choices, 'Choose your option')
+
+    // Znalezienie i zastąpienie parametru choice
+    def updatedParameters = currentBuildParameters.collect {
+        if (it.name == 'CHOICE_PARAM') {
+            return newChoiceParam
+        } else {
+            return it
+        }
+    }
+
+    // Zastosowanie nowych parametrów
+    if (!updatedParameters.isEmpty()) {
+        def newParamsAction = new ParametersAction(updatedParameters)
+        currentBuild.rawBuild.addAction(newParamsAction)
+        currentBuild.rawBuild.save()
+    }
+
+    stage('Stage 1') {
+        echo 'Executing Stage 1'
+        // Tutaj Twoje kroki dla Stage 1
+    }
+
+    stage('Stage 2') {
+        echo 'Executing Stage 2'
+        // Tutaj Twoje kroki dla Stage 2
+    }
+
+    stage('Stage 3') {
+        echo 'Executing Stage 3'
+        // Tutaj Twoje kroki dla Stage 3
+    }
+}
