@@ -25,3 +25,6 @@ end_date = start_date + timedelta(days=360)
 
 print("Starting date:", start_date.strftime("%Y-%m-%d"))
 print("Ending date:", end_date.strftime("%Y-%m-%d"))
+
+
+java -Djavax.net.ssl.trustStore=/path/to/your/truststore.jks -Djavax.net.ssl.trustStorePassword=yourpassword HttpsClient
