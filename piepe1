@@ -4,7 +4,7 @@ node {
     if (currentBuild.rawBuild.getAction(ParametersAction.class)) {
         currentBuildParameters = currentBuild.rawBuild.getAction(ParametersAction.class).parameters
     }
-
+    //
     // Odczytanie i przetworzenie pliku CSV
     def csvContent = readFile('test.csv').trim()
     def choices = csvContent.split(',').collect { it.trim() }
