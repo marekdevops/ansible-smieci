@@ -1,0 +1,47 @@
+---
+# NFS server settings
+nfs_server: "192.168.1.100"
+nfs_share: "/export/share"
+mount_point: "/mnt/nfs_share"
+
+# Package for NFS utilities
+nfs_package: "{{ 'nfs-utils' if ansible_os_family == 'RedHat' else 'nfs-common' }}"
+
+# Mount options to ensure system stability
+mount_options: "defaults,nofail,x-systemd.automount,_netdev,soft,timeo=50,retrans=5,bg"
+
+---
+- name: Montowanie dysku NFS
+  hosts: all
+  become: true
+  vars_files:
+    - vars/nfs_vars.yml
+
+  tasks:
+    - name: Instalacja pakietów wymaganych do NFS (nfs-utils dla RHEL/CentOS, nfs-common dla Debian/Ubuntu)
+      ansible.builtin.package:
+        name: "{{ nfs_package }}"
+        state: present
+
+    - name: Tworzenie katalogu montowania
+      ansible.builtin.file:
+        path: "{{ mount_point }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Dodanie wpisu do /etc/fstab
+      ansible.builtin.copy:
+        dest: /etc/fstab
+        content: "{{ lookup('template', 'templates/fstab.j2') }}"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: yes
+
+    - name: Montowanie wszystkich systemów plików z /etc/fstab
+      ansible.builtin.command: mount -a
+      register: mount_result
+      changed_when: mount_result.rc == 0
+      failed_when: mount_result.rc != 0
