@@ -1,17 +1,22 @@
 import os
 import time
 
-def create_file_with_number(number):
-    filename = f"file_{number}.txt"
+def create_file_with_number(path, number):
+    # Upewnij się, że katalog istnieje
+    if not os.path.exists(path):
+        os.makedirs(path)
+    
+    filename = os.path.join(path, f"file_{number}.txt")
     with open(filename, 'w') as f:
         # Wypełnienie pliku 'X' do 1 KB (1024 bajtów)
         f.write('X' * 1024)
 
 def main():
+    path = "/opt/cos"
     number = 1
     while True:
-        create_file_with_number(number)
-        print(f"Created file: file_{number}.txt")
+        create_file_with_number(path, number)
+        print(f"Created file: {os.path.join(path, f'file_{number}.txt')}")
         number += 1
         time.sleep(2)
 
