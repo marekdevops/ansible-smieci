@@ -1,0 +1,11 @@
+---
+- name: Check if NFS should be unmounted
+  debug:
+    msg: "Unmounting NFS from {{ nfs_mount_point }}"
+  when: hostvars[inventory_hostname].nfs_unmount | default(false)
+
+- name: Unmount NFS
+  mount:
+    path: "{{ nfs_mount_point }}"
+    state: absent
+  when: hostvars[inventory_hostname].nfs_unmount | default(false)
