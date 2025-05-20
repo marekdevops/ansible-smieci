@@ -1,0 +1,7 @@
+---
+- name: Dodaj grupę AD do uprawnień logowania na Linux
+  hosts: linux_servers
+  become: true
+  tasks:
+     - name: Zezwól grupie AD na logowanie
+       command: realm permit -g DOMAIN\\admin-linux
