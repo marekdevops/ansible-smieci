@@ -1,0 +1,63 @@
+---
+- name: Zarządzanie użytkownikami z warunkami i sudo
+  hosts: all
+  become: yes
+  vars:
+    users_config:
+      x_hosts: ["host1", "host2", "host3"]
+      y_hosts: ["host4", "host5", "host6", "host7"]
+      z_hosts: ["host8", "host9", "host10"]
+  tasks:
+    - name: Tworzenie grupy xyxz
+      group:
+        name: xyxz
+        state: present
+
+    - name: Tworzenie użytkownika X
+      user:
+        name: user_x
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        groups: ["xyxz"]
+        append: yes
+        password: "{{ 'haslo_x' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.x_hosts
+
+    - name: Tworzenie użytkownika Y
+      user:
+        name: user_y
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        groups: ["xyxz"]
+        append: yes
+        password: "{{ 'haslo_y' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.y_hosts
+
+    - name: Tworzenie użytkownika Z
+      user:
+        name: user_z
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        groups: ["xyxz"]
+        append: yes
+        password: "{{ 'haslo_z' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.z_hosts
+
+    - name: Konfiguracja sudo dla grupy xyxz
+      lineinfile:
+        path: /etc/sudoers.d/xyxz
+        line: '%xyxz ALL=(ALL) NOPASSWD: ALL'
+        state: present
+        mode: '0440'
+        create: yes
+        validate: 'visudo -cf %s'
+
+    - name: Sprawdzenie czy includedir jest włączone w sudoers
+      lineinfile:
+        path: /etc/sudoers
+        line: '#includedir /etc/sudoers.d'
+        state: present
+        validate: 'visudo -cf %s'
