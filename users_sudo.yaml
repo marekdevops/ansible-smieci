@@ -1,0 +1,21 @@
+---
+- name: Umożliwienie użytkownikom AD przełączania się na rabarbar
+  hosts: linux_servers
+  become: true
+  tasks:
+
+    - name: Upewnij się, że katalog sudoers.d istnieje
+      file:
+        path: /etc/sudoers.d
+        state: directory
+        mode: '0750'
+
+    - name: Dodaj wpis sudoers z ograniczeniem do su - rabarbar
+      copy:
+        dest: /etc/sudoers.d/ad_su_rabarbar
+        content: |
+          %DOMAIN\\admin-linux ALL=(ALL) NOPASSWD: /bin/su - rabarbar
+        owner: root
+        group: root
+        mode: '0440'
+      validate: '/usr/sbin/visudo -cf %s'
