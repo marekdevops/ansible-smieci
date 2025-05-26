@@ -1,0 +1,109 @@
+---
+- name: Zarządzanie użytkownikami z dostępem AD i sudo su
+  hosts: all
+  become: yes
+  vars:
+    users_config:
+      x_hosts: ["host1", "host2", "host3"]
+      y_hosts: ["host4", "host5", "host6", "host7"]
+      z_hosts: ["host8", "host9", "host10"]
+    # Konfiguracja grup AD i uprawnień
+    ad_sudo_config:
+      user_x: "AD_GROUP_DEVELOPERS"
+      user_y: "AD_GROUP_ADMINS"
+      user_z: "AD_GROUP_OPERATORS"
+  tasks:
+    - name: Tworzenie użytkownika X
+      user:
+        name: user_x
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        password: "{{ 'haslo_x' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.x_hosts
+
+    - name: Tworzenie użytkownika Y
+      user:
+        name: user_y
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        password: "{{ 'haslo_y' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.y_hosts
+
+    - name: Tworzenie użytkownika Z
+      user:
+        name: user_z
+        state: present
+        createhome: yes
+        shell: "/bin/bash"
+        password: "{{ 'haslo_z' | password_hash('sha512') }}"
+      when: inventory_hostname in users_config.z_hosts
+
+    # Konfiguracja sudo dla przełączania na user_x
+    - name: Konfiguracja sudo dla AD grupy na user_x
+      lineinfile:
+        path: /etc/sudoers.d/ad_switch_user_x
+        line: "%{{ ad_sudo_config.user_x }} ALL=(user_x) NOPASSWD: /bin/su - user_x"
+        state: present
+        mode: '0440'
+        create: yes
+        validate: 'visudo -cf %s'
+      when: inventory_hostname in users_config.x_hosts
+
+    # Konfiguracja sudo dla przełączania na user_y
+    - name: Konfiguracja sudo dla AD grupy na user_y
+      lineinfile:
+        path: /etc/sudoers.d/ad_switch_user_y
+        line: "%{{ ad_sudo_config.user_y }} ALL=(user_y) NOPASSWD: /bin/su - user_y"
+        state: present
+        mode: '0440'
+        create: yes
+        validate: 'visudo -cf %s'
+      when: inventory_hostname in users_config.y_hosts
+
+    # Konfiguracja sudo dla przełączania na user_z
+    - name: Konfiguracja sudo dla AD grupy na user_z
+      lineinfile:
+        path: /etc/sudoers.d/ad_switch_user_z
+        line: "%{{ ad_sudo_config.user_z }} ALL=(user_z) NOPASSWD: /bin/su - user_z"
+        state: present
+        mode: '0440'
+        create: yes
+        validate: 'visudo -cf %s'
+      when: inventory_hostname in users_config.z_hosts
+
+    - name: Sprawdzenie czy includedir jest włączone w sudoers
+      lineinfile:
+        path: /etc/sudoers
+        line: '#includedir /etc/sudoers.d'
+        state: present
+        validate: 'visudo -cf %s'
+
+    # Opcjonalnie: tworzenie aliasów dla łatwiejszego przełączania
+    - name: Tworzenie aliasu dla przełączania na user_x
+      lineinfile:
+        path: /etc/profile.d/user_switch.sh
+        line: "alias switch_to_user_x='sudo su - user_x'"
+        state: present
+        create: yes
+        mode: '0644'
+      when: inventory_hostname in users_config.x_hosts
+
+    - name: Tworzenie aliasu dla przełączania na user_y
+      lineinfile:
+        path: /etc/profile.d/user_switch.sh
+        line: "alias switch_to_user_y='sudo su - user_y'"
+        state: present
+        create: yes
+        mode: '0644'
+      when: inventory_hostname in users_config.y_hosts
+
+    - name: Tworzenie aliasu dla przełączania na user_z
+      lineinfile:
+        path: /etc/profile.d/user_switch.sh
+        line: "alias switch_to_user_z='sudo su - user_z'"
+        state: present
+        create: yes
+        mode: '0644'
+      when: inventory_hostname in users_config.z_hosts
