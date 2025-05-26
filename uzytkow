@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Domyślna nazwa użytkownika: aktualnie zalogowany
+USER_NAME=$(whoami)
+
+echo "🔹 Sprawdzenie limitów dla użytkownika: $USER_NAME"
+echo "----------------------------------------------"
+ulimit -a
+echo ""
+
+echo "🔹 Liczba procesów użytkownika $USER_NAME"
+ps -u "$USER_NAME" | wc -l
+echo ""
+
+echo "🔹 Liczba otwartych deskryptorów plików przez użytkownika $USER_NAME"
+lsof -u "$USER_NAME" | wc -l
+echo ""
+
+echo "🔹 Limity procesu (obecnego skryptu) z /proc/self/limits"
+cat /proc/self/limits
+echo ""
+
+# Część opcjonalna: sprawdzenie limitów systemd dla usługi
+read -p "Czy chcesz sprawdzić limity systemd dla konkretnej usługi? (tak/nie): " ODPOWIEDZ
+
+if [[ "$ODPOWIEDZ" == "tak" ]]; then
+    read -p "Podaj nazwę usługi (np. nginx, sshd): " SERVICE
+    echo ""
+    echo "🔹 Limity dla usługi systemd: $SERVICE"
+    systemctl show "$SERVICE" | grep -i limit
+    echo ""
+fi
