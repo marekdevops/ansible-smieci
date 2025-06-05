@@ -6,32 +6,31 @@
       copy:
         dest: /etc/sudoers.d/rabarbar_gitlab
         content: |
-          rabarbar ALL=(ALL) NOPASSWD: \
-            /usr/bin/gitlab-ctl status, \
-            /usr/bin/gitlab-ctl restart, \
-            /usr/bin/gitlab-ctl stop, \
-            /usr/bin/gitlab-ctl start, \
-            /usr/bin/gitlab-ctl reconfigure, \
-            /usr/bin/gitlab-ctl show-config, \
-            /usr/bin/gitlab-ctl tail, \
-            /usr/bin/gitlab-ctl deploy-page up, \
-            /usr/bin/gitlab-ctl deploy-page down, \
-            /usr/bin/gitlab-ctl hup *, \
-            /usr/bin/gitlab-ctl graceful-kill, \
-            /usr/bin/gitlab-ctl kill, \
-            /usr/bin/gitlab-ctl service-list, \
-            /usr/bin/gitlab-rake gitlab:check, \
-            /usr/bin/gitlab-rake gitlab:env:info, \
-            /usr/bin/gitlab-rake db:migrate, \
-            /usr/bin/gitlab-rake db:migrate:status, \
-            /usr/bin/gitlab-rake gitlab:db:reindex, \
-            /usr/bin/gitlab-rake gitlab:import:user_to_projects[*], \
-            /usr/bin/gitlab-rake gitlab:import:all_users_to_all_projects, \
-            /usr/bin/gitlab-rake gitlab:import:user_to_groups[*], \
-            /usr/bin/gitlab-rake gitlab:import:all_users_to_all_groups, \
-            /usr/bin/gitlab-rake gitlab:user_management:disable_project_and_group_creation[*], \
-            /usr/bin/gitlab-psql -d gitlabhq_production -c *, \
-            /usr/bin/gitlab-psql -d gitlabhq_production
+          rabarbar ALL=(ALL) NOPASSWD: /usr/bin/gitlab-ctl status,
+          /usr/bin/gitlab-ctl restart,
+          /usr/bin/gitlab-ctl stop,
+          /usr/bin/gitlab-ctl start,
+          /usr/bin/gitlab-ctl reconfigure,
+          /usr/bin/gitlab-ctl show-config,
+          /usr/bin/gitlab-ctl tail,
+          /usr/bin/gitlab-ctl deploy-page up,
+          /usr/bin/gitlab-ctl deploy-page down,
+          /usr/bin/gitlab-ctl hup *,
+          /usr/bin/gitlab-ctl graceful-kill,
+          /usr/bin/gitlab-ctl kill,
+          /usr/bin/gitlab-ctl service-list,
+          /usr/bin/gitlab-rake gitlab:check,
+          /usr/bin/gitlab-rake gitlab:env:info,
+          /usr/bin/gitlab-rake db:migrate,
+          /usr/bin/gitlab-rake db:migrate:status,
+          /usr/bin/gitlab-rake gitlab:db:reindex,
+          /usr/bin/gitlab-rake gitlab:import:user_to_projects[*],
+          /usr/bin/gitlab-rake gitlab:import:all_users_to_all_projects,
+          /usr/bin/gitlab-rake gitlab:import:user_to_groups[*],
+          /usr/bin/gitlab-rake gitlab:import:all_users_to_all_groups,
+          /usr/bin/gitlab-rake gitlab:user_management:disable_project_and_group_creation[*],
+          /usr/bin/gitlab-psql -d gitlabhq_production -c *,
+          /usr/bin/gitlab-psql -d gitlabhq_production
         owner: root
         group: root
         mode: '0440'
