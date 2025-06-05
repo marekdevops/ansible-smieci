@@ -1,0 +1,40 @@
+---
+- name: Umożliwienie grupie AD przełączania się na technicznego użytkownika z ograniczonymi komendami
+  hosts: linux_servers
+  become: true
+  vars:
+    ad_group: "DOMAIN\\linux-admins"      # Grupa AD
+    target_user: "rabarbar"               # Użytkownik techniczny
+    su_bin_path: "/bin/su"                # Ścieżka do su
+    allowed_commands:                     # Lista komend dozwolonych dla target_user przez sudo
+      - /bin/ls
+      - /bin/journalctl -u app
+      - /bin/systemctl restart app
+
+  tasks:
+
+    - name: Upewnij się, że katalog sudoers.d istnieje
+      file:
+        path: /etc/sudoers.d
+        state: directory
+        mode: '0750'
+
+    - name: Skonfiguruj sudoers dla grupy AD do przełączania się na {{ target_user }}
+      copy:
+        dest: "/etc/sudoers.d/ad_su_{{ target_user }}"
+        content: |
+          %{{ ad_group }} ALL=(ALL) NOPASSWD: {{ su_bin_path }} - {{ target_user }}
+        owner: root
+        group: root
+        mode: '0440'
+      validate: '/usr/sbin/visudo -cf %s'
+
+    - name: Skonfiguruj sudoers dla {{ target_user }} z listą dozwolonych komend
+      copy:
+        dest: "/etc/sudoers.d/{{ target_user }}_cmds"
+        content: |
+          {{ target_user }} ALL=(ALL) NOPASSWD: {{ allowed_commands | join(', ') }}
+        owner: root
+        group: root
+        mode: '0440'
+      validate: '/usr/sbin/visudo -cf %s'
