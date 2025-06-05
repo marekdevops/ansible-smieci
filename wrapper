@@ -1,0 +1,62 @@
+- name: Install GitLab admin sudo wrapper
+  hosts: gitlab_servers
+  become: yes
+  tasks:
+
+    - name: Deploy gitlab-admin-safe wrapper
+      copy:
+        dest: /usr/local/bin/gitlab-admin-safe
+        mode: '0755'
+        owner: root
+        group: root
+        content: |
+          #!/bin/bash
+
+          BIN_GITLAB_CTL="/usr/bin/gitlab-ctl"
+          BIN_GITLAB_RAKE="/usr/bin/gitlab-rake"
+          BIN_GITLAB_PSQL="/usr/bin/gitlab-psql"
+
+          CMD="$1"
+          shift
+
+          case "$CMD" in
+            gitlab-ctl)
+              ALLOWED_CTL=("hup unicorn" "hup sidekiq" "status" "restart" "start" "stop" "reconfigure")
+              CMD_LINE="$*"
+              for allowed in "${ALLOWED_CTL[@]}"; do
+                if [[ "$CMD_LINE" == "$allowed" ]]; then
+                  exec $BIN_GITLAB_CTL $CMD_LINE
+                  exit 0
+                fi
+              done
+              ;;
+
+            gitlab-rake)
+              ALLOWED_RAKE=("gitlab:check" "gitlab:env:info" "db:migrate" "db:migrate:status" "gitlab:db:reindex")
+              for allowed in "${ALLOWED_RAKE[@]}"; do
+                if [[ "$1" == "$allowed" ]]; then
+                  exec $BIN_GITLAB_RAKE "$1"
+                  exit 0
+                fi
+              done
+              ;;
+
+            gitlab-psql)
+              if [[ "$1" == "-d" && "$2" == "gitlabhq_production" && "$3" == "-c" && "$4" =~ ^SELECT.* ]]; then
+                exec $BIN_GITLAB_PSQL "$@"
+                exit 0
+              fi
+              ;;
+          esac
+
+          echo "❌ Command not allowed or invalid: $CMD $*" >&2
+          exit 1
+
+    - name: Configure sudoers for gitlab-admin-safe wrapper
+      copy:
+        dest: /etc/sudoers.d/rabarbar_gitlab_safe
+        owner: root
+        group: root
+        mode: '0440'
+        content: |
+          rabarbar ALL=(ALL) NOPASSWD: /usr/local/bin/gitlab-admin-safe
