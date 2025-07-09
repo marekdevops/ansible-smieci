@@ -34,13 +34,13 @@
           =================================
           UNUSED DISKS REPORT
           =================================
-          {% if unused_disks is defined and unused_disks | length > 0 %}
+          {% if unused_disks is defined and unused_disks | length > 0 -%}
           Available unused disks:
-          {% for disk in unused_disks %}
+          {% for disk in unused_disks -%}
           - Device: {{ disk.name }}
             Size: {{ disk.size }}
             Type: {{ disk.type }}
-          {% endfor %}
-          {% else %}
+          {% endfor -%}
+          {% else -%}
           No unused disks found.
           {% endif %}
