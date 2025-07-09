@@ -1,0 +1,30 @@
+{
+    "manifest_version": 2,
+    "name": "Klikacz",
+    "version": "1.0",
+    "description": "Klikanie zawartości strony za pomocą skrótu klawiaturowego.",
+    "permissions": [
+      "activeTab"
+    ],
+    "background": {
+      "scripts": ["background.js"],
+      "persistent": false
+    },
+    "commands": {
+      "trigger-click": {
+        "suggested_key": {
+          "default": "Ctrl+A",
+          "mac": "Command+A"
+        },
+        "description": "Kliknij w wybrany element strony"
+      }
+    },
+    "content_scripts": [
+      {
+        "matches": ["<all_urls>"],
+        "js": ["content.js"]
+      }
+    ]
+  }
+  
+  <button class="btn-standard">Reset</button><button class="btn-standard call-to-action">Search</button>
