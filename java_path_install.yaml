@@ -1,0 +1,45 @@
+---
+- name: Install Java and set JAVA_HOME
+  hosts: all
+  become: yes
+  vars:
+    java_version: "java-1.8.0-openjdk"
+    java_home: "/usr/lib/jvm/java-1.8.0-openjdk"
+  
+  tasks:
+    - name: Install Java package
+      yum:
+        name: "{{ java_version }}"
+        state: present
+    
+    - name: Install Java development kit
+      yum:
+        name: "{{ java_version }}-devel"
+        state: present
+    
+    - name: Set JAVA_HOME system-wide in /etc/environment
+      lineinfile:
+        path: /etc/environment
+        line: "JAVA_HOME={{ java_home }}"
+        regexp: "^JAVA_HOME="
+        create: yes
+    
+    - name: Create java.sh profile script
+      copy:
+        content: |
+          export JAVA_HOME={{ java_home }}
+          export PATH=$JAVA_HOME/bin:$PATH
+        dest: /etc/profile.d/java.sh
+        mode: '0644'
+    
+    - name: Update alternatives for java
+      alternatives:
+        name: java
+        path: "{{ java_home }}/bin/java"
+        link: /usr/bin/java
+    
+    - name: Update alternatives for javac
+      alternatives:
+        name: javac
+        path: "{{ java_home }}/bin/javac"
+        link: /usr/bin/javac
