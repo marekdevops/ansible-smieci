@@ -39,4 +39,8 @@
           {% for disk in unused_disks %}
           - Device: {{ disk.name }}
             Size: {{ disk.size }}
-            Type:
+            Type: {{ disk.type }}
+          {% endfor %}
+          {% else %}
+          No unused disks found.
+          {% endif %}
