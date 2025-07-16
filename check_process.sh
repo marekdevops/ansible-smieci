@@ -1,0 +1,212 @@
+#!/bin/bash
+
+# Skrypt do sprawdzania logów BESClient
+# Sprawdza istnienie plików z dzisiejszą datą i wpisy "Report posted successfully" z ostatniej godziny
+
+# Kolory do wyświetlania
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Konfiguracja
+LOG_DIR="/var/opt/BESClient/__BESData/__Global/Logs"
+SUCCESS_PATTERN="Report posted successfully"
+TODAY=$(date +%Y%m%d)
+CURRENT_HOUR=$(date +%H)
+CURRENT_MINUTE=$(date +%M)
+
+# Funkcje do logowania
+log() {
+    echo -e "${GREEN}[$(date '+%Y-%m-%d %H:%M:%S')]${NC} $1"
+}
+
+warn() {
+    echo -e "${YELLOW}[$(date '+%Y-%m-%d %H:%M:%S')] WARNING:${NC} $1"
+}
+
+error() {
+    echo -e "${RED}[$(date '+%Y-%m-%d %H:%M:%S')] ERROR:${NC} $1"
+}
+
+info() {
+    echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
+}
+
+# Banner
+echo "================================================================"
+echo "            BESClient Log Checker Script"
+echo "================================================================"
+info "Checking date: $TODAY"
+info "Current time: $(date '+%H:%M:%S')"
+info "Log directory: $LOG_DIR"
+echo
+
+# Sprawdź czy katalog istnieje
+log "Sprawdzanie istnienia katalogu logów..."
+if [[ ! -d "$LOG_DIR" ]]; then
+    error "Katalog $LOG_DIR nie istnieje!"
+    exit 1
+fi
+log "Katalog logów istnieje: $LOG_DIR"
+
+# Znajdź pliki z dzisiejszą datą
+log "Szukanie plików logów z datą $TODAY..."
+TODAY_LOG_FILES=$(find "$LOG_DIR" -name "${TODAY}*.log" -type f 2>/dev/null)
+
+if [[ -z "$TODAY_LOG_FILES" ]]; then
+    error "Nie znaleziono żadnych plików logów z dzisiejszą datą (${TODAY}*.log)"
+    exit 1
+fi
+
+log "Znalezione pliki logów z dzisiejszą datą:"
+echo "$TODAY_LOG_FILES" | while read -r file; do
+    if [[ -n "$file" ]]; then
+        file_size=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo "unknown")
+        file_mtime=$(stat -f%Sm "$file" 2>/dev/null || stat -c%y "$file" 2>/dev/null || echo "unknown")
+        info "  - $(basename "$file") (rozmiar: ${file_size} bajtów, modyfikacja: ${file_mtime})"
+    fi
+done
+echo
+
+# Funkcja do konwersji czasu HH:MM:SS na minuty od północy
+time_to_minutes() {
+    local time_str="$1"
+    local hour=$(echo "$time_str" | cut -d':' -f1)
+    local minute=$(echo "$time_str" | cut -d':' -f2)
+    echo $((hour * 60 + minute))
+}
+
+# Oblicz zakres czasu dla ostatniej godziny
+CURRENT_MINUTES=$(time_to_minutes "${CURRENT_HOUR}:${CURRENT_MINUTE}")
+START_MINUTES=$((CURRENT_MINUTES - 60))
+
+# Obsługa przejścia przez północ
+if [[ $START_MINUTES -lt 0 ]]; then
+    START_MINUTES=$((START_MINUTES + 1440)) # 24 * 60
+    CROSS_MIDNIGHT=1
+else
+    CROSS_MIDNIGHT=0
+fi
+
+START_HOUR=$((START_MINUTES / 60))
+START_MINUTE=$((START_MINUTES % 60))
+
+log "Sprawdzanie wpisów 'Report posted successfully' z ostatniej godziny..."
+info "Zakres czasowy: $(printf '%02d:%02d' $START_HOUR $START_MINUTE) - $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
+
+# Funkcja do sprawdzenia czy czas jest w zakresie ostatniej godziny
+is_within_last_hour() {
+    local log_time="$1"
+    local log_hour=$(echo "$log_time" | cut -d':' -f1)
+    local log_minute=$(echo "$log_time" | cut -d':' -f2)
+    local log_minutes=$(time_to_minutes "${log_hour}:${log_minute}")
+    
+    if [[ $CROSS_MIDNIGHT -eq 1 ]]; then
+        # Przejście przez północ
+        if [[ $log_minutes -ge $START_MINUTES || $log_minutes -le $CURRENT_MINUTES ]]; then
+            return 0
+        fi
+    else
+        # Normalny przypadek
+        if [[ $log_minutes -ge $START_MINUTES && $log_minutes -le $CURRENT_MINUTES ]]; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Sprawdź każdy plik z dzisiejszą datą
+total_success_entries=0
+files_with_success=0
+success_details=()
+
+echo "$TODAY_LOG_FILES" | while read -r log_file; do
+    if [[ -n "$log_file" && -f "$log_file" ]]; then
+        info "Sprawdzanie pliku: $(basename "$log_file")"
+        
+        # Sprawdź czy plik nie jest pusty
+        if [[ ! -s "$log_file" ]]; then
+            warn "Plik $(basename "$log_file") jest pusty"
+            continue
+        fi
+        
+        # Znajdź wpisy "Report posted successfully" z odpowiednimi czasami
+        file_success_count=0
+        while IFS= read -r line; do
+            # Szukaj wzorca z czasem
+            if echo "$line" | grep -q "$SUCCESS_PATTERN"; then
+                # Wyodrębnij czas z linii (zakładając format: "At HH:MM:SS")
+                time_match=$(echo "$line" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+                
+                if [[ -n "$time_match" ]]; then
+                    if is_within_last_hour "$time_match"; then
+                        echo -e "  ${GREEN}✓${NC} Znaleziono: $time_match - Report posted successfully"
+                        ((file_success_count++))
+                        ((total_success_entries++))
+                    fi
+                fi
+            fi
+        done < "$log_file"
+        
+        if [[ $file_success_count -gt 0 ]]; then
+            ((files_with_success++))
+            info "Plik $(basename "$log_file"): $file_success_count wpisów z ostatniej godziny"
+        else
+            warn "Plik $(basename "$log_file"): brak wpisów 'Report posted successfully' z ostatniej godziny"
+        fi
+        echo
+    fi
+done
+
+# Podsumowanie wyników
+echo "================================================================"
+echo "                    PODSUMOWANIE WYNIKÓW"
+echo "================================================================"
+
+# Ponownie sprawdź pliki (ponieważ poprzednia pętla była w subshell)
+total_files=$(echo "$TODAY_LOG_FILES" | wc -l)
+files_checked=0
+final_success_count=0
+final_files_with_success=0
+
+for log_file in $TODAY_LOG_FILES; do
+    if [[ -n "$log_file" && -f "$log_file" ]]; then
+        ((files_checked++))
+        file_has_success=0
+        
+        while IFS= read -r line; do
+            if echo "$line" | grep -q "$SUCCESS_PATTERN"; then
+                time_match=$(echo "$line" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+                if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
+                    ((final_success_count++))
+                    file_has_success=1
+                fi
+            fi
+        done < "$log_file"
+        
+        if [[ $file_has_success -eq 1 ]]; then
+            ((final_files_with_success++))
+        fi
+    fi
+done
+
+log "Pliki logów z dzisiejszą datą: $files_checked"
+log "Pliki z wpisami 'Report posted successfully' z ostatniej godziny: $final_files_with_success"
+log "Łączna liczba wpisów 'Report posted successfully' z ostatniej godziny: $final_success_count"
+
+# Określ status końcowy
+if [[ $files_checked -eq 0 ]]; then
+    error "BŁĄD: Brak plików logów z dzisiejszą datą"
+    exit 1
+elif [[ $final_success_count -eq 0 ]]; then
+    error "OSTRZEŻENIE: Brak wpisów 'Report posted successfully' z ostatniej godziny"
+    exit 2
+elif [[ $final_files_with_success -eq $files_checked ]]; then
+    log "SUKCES: Wszystkie pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    exit 0
+else
+    warn "CZĘŚCIOWY SUKCES: Niektóre pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    exit 3
+fi

@@ -1,0 +1,200 @@
+---
+- name: Check BesClient process status on target hosts
+  hosts: all
+  gather_facts: yes
+  become: no
+  
+  vars:
+    process_name: "BesClient"
+    report_file: "/tmp/besclient_report_{{ ansible_date_time.epoch }}.txt"
+    
+  tasks:
+    - name: Check if BesClient process is running
+      shell: |
+        if pgrep -f "{{ process_name }}" > /dev/null; then
+          echo "RUNNING"
+        else
+          echo "NOT_RUNNING"
+        fi
+      register: process_status
+      changed_when: false
+      failed_when: false
+
+    - name: Get detailed process information if running
+      shell: |
+        ps aux | grep "{{ process_name }}" | grep -v grep || echo "No process found"
+      register: process_details
+      changed_when: false
+      failed_when: false
+      when: process_status.stdout == "RUNNING"
+
+    - name: Get process count
+      shell: |
+        pgrep -f "{{ process_name }}" | wc -l
+      register: process_count
+      changed_when: false
+      failed_when: false
+
+    - name: Get system uptime
+      shell: uptime
+      register: system_uptime
+      changed_when: false
+      failed_when: false
+
+    - name: Create process status fact
+      set_fact:
+        host_process_info:
+          hostname: "{{ inventory_hostname }}"
+          ip_address: "{{ ansible_default_ipv4.address | default('N/A') }}"
+          os_family: "{{ ansible_os_family | default('Unknown') }}"
+          os_version: "{{ ansible_distribution }} {{ ansible_distribution_version | default('Unknown') }}"
+          process_status: "{{ process_status.stdout }}"
+          process_count: "{{ process_count.stdout | default('0') }}"
+          uptime: "{{ system_uptime.stdout | default('N/A') }}"
+          check_time: "{{ ansible_date_time.iso8601 }}"
+          process_details: "{{ process_details.stdout | default('N/A') if process_status.stdout == 'RUNNING' else 'N/A' }}"
+
+    - name: Display host status
+      debug:
+        msg: |
+          ==========================================
+          HOST: {{ host_process_info.hostname }}
+          ==========================================
+          IP Address: {{ host_process_info.ip_address }}
+          OS: {{ host_process_info.os_version }}
+          Process Status: {{ host_process_info.process_status }}
+          Process Count: {{ host_process_info.process_count }}
+          System Uptime: {{ host_process_info.uptime }}
+          Check Time: {{ host_process_info.check_time }}
+          {% if host_process_info.process_status == 'RUNNING' %}
+          Process Details:
+          {{ host_process_info.process_details }}
+          {% endif %}
+
+- name: Generate consolidated report
+  hosts: localhost
+  gather_facts: no
+  run_once: true
+  
+  tasks:
+    - name: Collect all host information
+      set_fact:
+        all_hosts_info: "{{ groups['all'] | map('extract', hostvars, 'host_process_info') | list }}"
+
+    - name: Create summary statistics
+      set_fact:
+        running_hosts: "{{ all_hosts_info | selectattr('process_status', 'equalto', 'RUNNING') | list }}"
+        stopped_hosts: "{{ all_hosts_info | selectattr('process_status', 'equalto', 'NOT_RUNNING') | list }}"
+        total_hosts: "{{ all_hosts_info | length }}"
+        running_count: "{{ running_hosts | length }}"
+        stopped_count: "{{ stopped_hosts | length }}"
+
+    - name: Display consolidated report
+      debug:
+        msg: |
+          ################################################################
+          #                    BesClient PROCESS REPORT                   #
+          ################################################################
+          
+          SUMMARY:
+          ========
+          Total Hosts Checked: {{ total_hosts }}
+          Hosts with BesClient RUNNING: {{ running_count }}
+          Hosts with BesClient STOPPED: {{ stopped_count }}
+          Success Rate: {{ ((running_count | float / total_hosts | float) * 100) | round(1) }}%
+          Report Generated: {{ ansible_date_time.iso8601 }}
+          
+          HOSTS WITH BesClient RUNNING:
+          ==============================
+          {% if running_hosts | length > 0 %}
+          {% for host in running_hosts %}
+          - {{ host.hostname }} ({{ host.ip_address }}) - {{ host.os_version }}
+            Process Count: {{ host.process_count }}
+            Uptime: {{ host.uptime }}
+          {% endfor %}
+          {% else %}
+          No hosts found with BesClient running.
+          {% endif %}
+          
+          HOSTS WITH BesClient STOPPED:
+          ==============================
+          {% if stopped_hosts | length > 0 %}
+          {% for host in stopped_hosts %}
+          - {{ host.hostname }} ({{ host.ip_address }}) - {{ host.os_version }}
+            Uptime: {{ host.uptime }}
+          {% endfor %}
+          {% else %}
+          All hosts have BesClient running.
+          {% endif %}
+          
+          DETAILED HOST INFORMATION:
+          ==========================
+          {% for host in all_hosts_info %}
+          
+          Host: {{ host.hostname }}
+          -------------------------
+          IP: {{ host.ip_address }}
+          OS: {{ host.os_version }}
+          Status: {{ host.process_status }}
+          Process Count: {{ host.process_count }}
+          Uptime: {{ host.uptime }}
+          Check Time: {{ host.check_time }}
+          {% if host.process_status == 'RUNNING' and host.process_details != 'N/A' %}
+          Process Details: {{ host.process_details }}
+          {% endif %}
+          {% endfor %}
+          
+          ################################################################
+
+    - name: Create report file
+      copy:
+        content: |
+          BesClient Process Report
+          ========================
+          Generated: {{ ansible_date_time.iso8601 }}
+          
+          SUMMARY:
+          Total Hosts: {{ total_hosts }}
+          Running: {{ running_count }}
+          Stopped: {{ stopped_count }}
+          Success Rate: {{ ((running_count | float / total_hosts | float) * 100) | round(1) }}%
+          
+          RUNNING HOSTS:
+          {% for host in running_hosts %}
+          - {{ host.hostname }} ({{ host.ip_address }}) - Count: {{ host.process_count }}
+          {% endfor %}
+          
+          STOPPED HOSTS:
+          {% for host in stopped_hosts %}
+          - {{ host.hostname }} ({{ host.ip_address }})
+          {% endfor %}
+          
+          DETAILED INFORMATION:
+          {% for host in all_hosts_info %}
+          
+          {{ host.hostname }} ({{ host.ip_address }}):
+            OS: {{ host.os_version }}
+            Status: {{ host.process_status }}
+            Process Count: {{ host.process_count }}
+            Uptime: {{ host.uptime }}
+            Check Time: {{ host.check_time }}
+          {% if host.process_status == 'RUNNING' and host.process_details != 'N/A' %}
+            Details: {{ host.process_details }}
+          {% endif %}
+          {% endfor %}
+        dest: "{{ report_file }}"
+        mode: '0644'
+      delegate_to: localhost
+
+    - name: Display report file location
+      debug:
+        msg: |
+          ================================================================
+          Report saved to: {{ report_file }}
+          ================================================================
+          
+          To view the report:
+          cat {{ report_file }}
+          
+          To copy report to current directory:
+          cp {{ report_file }} ./besclient_report.txt
