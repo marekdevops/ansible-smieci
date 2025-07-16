@@ -2,6 +2,9 @@
 
 # Skrypt do sprawdzania logów BESClient
 # Sprawdza istnienie plików z dzisiejszą datą i wpisy "Report posted successfully" z ostatniej godziny
+# Analizuje zarówno:
+# 1. Linie zawierające czas i "Report posted successfully" w tej samej linii
+# 2. Pary linii: linia z czasem + następna linia z "Report posted successfully"
 
 # Kolory do wyświetlania
 RED='\033[0;31m'
@@ -13,6 +16,7 @@ NC='\033[0m' # No Color
 # Konfiguracja
 LOG_DIR="/var/opt/BESClient/__BESData/__Global/Logs"
 SUCCESS_PATTERN="Report posted successfully"
+SUCCESS_PATTERN_WILDCARD="*Report posted successfully*"
 TODAY=$(date +%Y%m%d)
 CURRENT_HOUR=$(date +%H)
 CURRENT_MINUTE=$(date +%M)
@@ -95,6 +99,30 @@ START_MINUTE=$((START_MINUTES % 60))
 
 log "Sprawdzanie wpisów 'Report posted successfully' z ostatniej godziny..."
 info "Zakres czasowy: $(printf '%02d:%02d' $START_HOUR $START_MINUTE) - $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
+info "Wzorzec wyszukiwania: '$SUCCESS_PATTERN'"
+
+# Test wzorców wyszukiwania
+info "Testowanie wzorców..."
+test_lines=(
+    "At 14:30:15 * Report posted successfully *"
+    "14:30:15 Report posted successfully"
+    "2024-07-16 14:30:15 * Report posted successfully *"
+    "Report posted successfully at 14:30:15"
+)
+
+for test_line in "${test_lines[@]}"; do
+    if echo "$test_line" | grep -q "$SUCCESS_PATTERN"; then
+        time_match=$(echo "$test_line" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+        if [[ -n "$time_match" ]]; then
+            echo -e "  ${GREEN}✓${NC} Test wzorca: '$test_line' -> czas: $time_match"
+        else
+            echo -e "  ${YELLOW}?${NC} Test wzorca: '$test_line' -> brak czasu"
+        fi
+    else
+        echo -e "  ${RED}✗${NC} Test wzorca: '$test_line' -> wzorzec nie znaleziony"
+    fi
+done
+echo
 
 # Funkcja do sprawdzenia czy czas jest w zakresie ostatniej godziny
 is_within_last_hour() {
@@ -134,21 +162,57 @@ echo "$TODAY_LOG_FILES" | while read -r log_file; do
         
         # Znajdź wpisy "Report posted successfully" z odpowiednimi czasami
         file_success_count=0
-        while IFS= read -r line; do
-            # Szukaj wzorca z czasem
-            if echo "$line" | grep -q "$SUCCESS_PATTERN"; then
-                # Wyodrębnij czas z linii (zakładając format: "At HH:MM:SS")
-                time_match=$(echo "$line" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+        
+        # Wczytaj plik do tablicy dla lepszej kontroli linii
+        mapfile -t file_lines < "$log_file"
+        
+        for ((i=0; i<${#file_lines[@]}; i++)); do
+            current_line="${file_lines[i]}"
+            next_line=""
+            
+            # Pobierz następną linię jeśli istnieje
+            if [[ $((i+1)) -lt ${#file_lines[@]} ]]; then
+                next_line="${file_lines[$((i+1))]}"
+            fi
+            
+            # Szukaj wzorca z czasem w aktualnej linii
+            if echo "$current_line" | grep -q "$SUCCESS_PATTERN"; then
+                # Wyodrębnij czas z aktualnej linii (różne formaty)
+                time_match=$(echo "$current_line" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
                 
                 if [[ -n "$time_match" ]]; then
                     if is_within_last_hour "$time_match"; then
-                        echo -e "  ${GREEN}✓${NC} Znaleziono: $time_match - Report posted successfully"
+                        echo -e "  ${GREEN}✓${NC} Znaleziono w linii $((i+1)): $time_match - Report posted successfully"
+                        echo -e "    ${BLUE}Linia:${NC} $current_line"
+                        if [[ -n "$next_line" ]]; then
+                            echo -e "    ${BLUE}Następna linia:${NC} $next_line"
+                        fi
                         ((file_success_count++))
                         ((total_success_entries++))
+                        echo
                     fi
                 fi
             fi
-        done < "$log_file"
+            
+            # Sprawdź także czy wzorzec jest w następnej linii, a czas w aktualnej
+            if [[ -n "$next_line" ]] && echo "$next_line" | grep -q "$SUCCESS_PATTERN"; then
+                # Szukaj czasu w aktualnej linii (różne formaty)
+                time_match=$(echo "$current_line" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+                
+                if [[ -n "$time_match" ]]; then
+                    if is_within_last_hour "$time_match"; then
+                        echo -e "  ${GREEN}✓${NC} Znaleziono w parze linii $((i+1))-$((i+2)): $time_match - Report posted successfully"
+                        echo -e "    ${BLUE}Linia z czasem:${NC} $current_line"
+                        echo -e "    ${BLUE}Linia z komunikatem:${NC} $next_line"
+                        ((file_success_count++))
+                        ((total_success_entries++))
+                        echo
+                        # Pomiń następną linię żeby nie sprawdzać jej ponownie
+                        ((i++))
+                    fi
+                fi
+            fi
+        done
         
         if [[ $file_success_count -gt 0 ]]; then
             ((files_with_success++))
@@ -176,15 +240,38 @@ for log_file in $TODAY_LOG_FILES; do
         ((files_checked++))
         file_has_success=0
         
-        while IFS= read -r line; do
-            if echo "$line" | grep -q "$SUCCESS_PATTERN"; then
-                time_match=$(echo "$line" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+        # Wczytaj plik do tablicy dla podsumowania
+        mapfile -t file_lines < "$log_file"
+        
+        for ((i=0; i<${#file_lines[@]}; i++)); do
+            current_line="${file_lines[i]}"
+            next_line=""
+            
+            # Pobierz następną linię jeśli istnieje
+            if [[ $((i+1)) -lt ${#file_lines[@]} ]]; then
+                next_line="${file_lines[$((i+1))]}"
+            fi
+            
+            # Sprawdź wzorzec w aktualnej linii z czasem
+            if echo "$current_line" | grep -q "$SUCCESS_PATTERN"; then
+                time_match=$(echo "$current_line" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
                 if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
                     ((final_success_count++))
                     file_has_success=1
                 fi
             fi
-        done < "$log_file"
+            
+            # Sprawdź wzorzec w następnej linii z czasem w aktualnej
+            if [[ -n "$next_line" ]] && echo "$next_line" | grep -q "$SUCCESS_PATTERN"; then
+                time_match=$(echo "$current_line" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+                if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
+                    ((final_success_count++))
+                    file_has_success=1
+                    # Pomiń następną linię
+                    ((i++))
+                fi
+            fi
+        done
         
         if [[ $file_has_success -eq 1 ]]; then
             ((final_files_with_success++))
