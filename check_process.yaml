@@ -79,7 +79,7 @@
   tasks:
     - name: Collect all host information
       set_fact:
-        all_hosts_info: "{{ groups['all'] | map('extract', hostvars, 'host_process_info') | list }}"
+        all_hosts_info: "{{ groups['all'] | map('extract', hostvars, 'host_process_info') | select('defined') | list }}"
 
     - name: Create summary statistics
       set_fact:
@@ -98,15 +98,15 @@
           
           SUMMARY:
           ========
-          Total Hosts Checked: {{ total_hosts }}
-          Hosts with BesClient RUNNING: {{ running_count }}
-          Hosts with BesClient STOPPED: {{ stopped_count }}
-          Success Rate: {{ ((running_count | float / total_hosts | float) * 100) | round(1) }}%
+          Total Hosts Checked: {{ total_hosts | default(0) }}
+          Hosts with BesClient RUNNING: {{ running_count | default(0) }}
+          Hosts with BesClient STOPPED: {{ stopped_count | default(0) }}
+          Success Rate: {{ ((running_count | default(0) | float / (total_hosts | default(1)) | float) * 100) | round(1) }}%
           Report Generated: {{ ansible_date_time.iso8601 }}
           
           HOSTS WITH BesClient RUNNING:
           ==============================
-          {% if running_hosts | length > 0 %}
+          {% if running_hosts is defined and running_hosts | length > 0 %}
           {% for host in running_hosts %}
           - {{ host.hostname }} ({{ host.ip_address }}) - {{ host.os_version }}
             Process Count: {{ host.process_count }}
@@ -118,7 +118,7 @@
           
           HOSTS WITH BesClient STOPPED:
           ==============================
-          {% if stopped_hosts | length > 0 %}
+          {% if stopped_hosts is defined and stopped_hosts | length > 0 %}
           {% for host in stopped_hosts %}
           - {{ host.hostname }} ({{ host.ip_address }}) - {{ host.os_version }}
             Uptime: {{ host.uptime }}
@@ -129,6 +129,7 @@
           
           DETAILED HOST INFORMATION:
           ==========================
+          {% if all_hosts_info is defined and all_hosts_info | length > 0 %}
           {% for host in all_hosts_info %}
           
           Host: {{ host.hostname }}
@@ -143,6 +144,9 @@
           Process Details: {{ host.process_details }}
           {% endif %}
           {% endfor %}
+          {% else %}
+          No host information available.
+          {% endif %}
           
           ################################################################
 
@@ -154,22 +158,31 @@
           Generated: {{ ansible_date_time.iso8601 }}
           
           SUMMARY:
-          Total Hosts: {{ total_hosts }}
-          Running: {{ running_count }}
-          Stopped: {{ stopped_count }}
-          Success Rate: {{ ((running_count | float / total_hosts | float) * 100) | round(1) }}%
+          Total Hosts: {{ total_hosts | default(0) }}
+          Running: {{ running_count | default(0) }}
+          Stopped: {{ stopped_count | default(0) }}
+          Success Rate: {{ ((running_count | default(0) | float / (total_hosts | default(1)) | float) * 100) | round(1) }}%
           
           RUNNING HOSTS:
+          {% if running_hosts is defined and running_hosts | length > 0 %}
           {% for host in running_hosts %}
           - {{ host.hostname }} ({{ host.ip_address }}) - Count: {{ host.process_count }}
           {% endfor %}
+          {% else %}
+          No hosts with BesClient running found.
+          {% endif %}
           
           STOPPED HOSTS:
+          {% if stopped_hosts is defined and stopped_hosts | length > 0 %}
           {% for host in stopped_hosts %}
           - {{ host.hostname }} ({{ host.ip_address }})
           {% endfor %}
+          {% else %}
+          No hosts with BesClient stopped found.
+          {% endif %}
           
           DETAILED INFORMATION:
+          {% if all_hosts_info is defined and all_hosts_info | length > 0 %}
           {% for host in all_hosts_info %}
           
           {{ host.hostname }} ({{ host.ip_address }}):
@@ -182,6 +195,9 @@
             Details: {{ host.process_details }}
           {% endif %}
           {% endfor %}
+          {% else %}
+          No detailed host information available.
+          {% endif %}
         dest: "{{ report_file }}"
         mode: '0644'
       delegate_to: localhost
