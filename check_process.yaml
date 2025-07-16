@@ -54,6 +54,14 @@
           check_time: "{{ ansible_date_time.iso8601 }}"
           process_details: "{{ process_details.stdout | default('N/A') if process_status.stdout == 'RUNNING' else 'N/A' }}"
 
+    - name: Add host info to localhost for reporting
+      add_host:
+        name: "{{ inventory_hostname }}_report"
+        groups: report_hosts
+        host_process_info: "{{ host_process_info }}"
+      delegate_to: localhost
+      run_once_per_host: true
+
     - name: Display host status
       debug:
         msg: |
@@ -73,13 +81,38 @@
 
 - name: Generate consolidated report
   hosts: localhost
-  gather_facts: no
+  gather_facts: yes
   run_once: true
+  connection: local
   
   tasks:
+    - name: Debug available hostvars
+      debug:
+        msg: "Available hosts: {{ hostvars.keys() | list }}"
+
     - name: Collect all host information
       set_fact:
-        all_hosts_info: "{{ groups['all'] | map('extract', hostvars, 'host_process_info') | select('defined') | list }}"
+        all_hosts_info: "{{ groups['report_hosts'] | default([]) | map('extract', hostvars, 'host_process_info') | select('defined') | list }}"
+      when: groups['report_hosts'] is defined
+
+    - name: Alternative collection method if first fails
+      set_fact:
+        all_hosts_info: "{{ hostvars.values() | selectattr('host_process_info', 'defined') | map(attribute='host_process_info') | list }}"
+      when: (all_hosts_info is not defined or all_hosts_info | length == 0) and hostvars.values() | selectattr('host_process_info', 'defined') | list | length > 0
+
+    - name: Fallback collection from ansible_play_hosts_all
+      set_fact:
+        all_hosts_info: "{{ ansible_play_hosts_all | default([]) | map('extract', hostvars, 'host_process_info') | select('defined') | list }}"
+      when: all_hosts_info is not defined or all_hosts_info | length == 0
+
+    - name: Final fallback to empty list if no data
+      set_fact:
+        all_hosts_info: []
+      when: all_hosts_info is not defined
+
+    - name: Debug collected info
+      debug:
+        msg: "Collected {{ all_hosts_info | length }} host records"
 
     - name: Create summary statistics
       set_fact:
