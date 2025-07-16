@@ -20,6 +20,9 @@ TODAY=$(date +%Y%m%d)
 CURRENT_HOUR=$(date +%H)
 CURRENT_MINUTE=$(date +%M)
 
+# Opcja debugowania - ustaw na 1 żeby widzieć więcej szczegółów
+DEBUG=${DEBUG:-0}
+
 # Usuń wiodące zera dla uniknięcia błędów ósemkowych
 CURRENT_HOUR=${CURRENT_HOUR#0}
 CURRENT_MINUTE=${CURRENT_MINUTE#0}
@@ -41,6 +44,12 @@ error() {
 
 info() {
     echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] INFO:${NC} $1"
+}
+
+debug() {
+    if [[ $DEBUG -eq 1 ]]; then
+        echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] DEBUG:${NC} $1"
+    fi
 }
 
 # Funkcja do konwersji czasu HH:MM:SS na minuty od północy - ZOPTYMALIZOWANA
@@ -130,6 +139,31 @@ START_MINUTE=$((START_MINUTES % 60))
 log "Sprawdzanie wpisów 'Report posted successfully' z ostatniej godziny..."
 info "Zakres czasowy: $(printf '%02d:%02d' $START_HOUR $START_MINUTE) - $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
 info "Wzorzec wyszukiwania: '$SUCCESS_PATTERN'"
+
+# Test kilku przykładowych formatów
+if [[ $DEBUG -eq 1 ]]; then
+    info "=== TEST FORMATÓW ==="
+    test_lines=(
+        "At 14:30:15 * Report posted successfully *"
+        "14:30:15 Report posted successfully"
+        "2024-07-16 14:30:15 * Report posted successfully *"
+        "$(date '+%Y-%m-%d %H:%M:%S') * Report posted successfully *"
+    )
+    
+    for test_line in "${test_lines[@]}"; do
+        time_match=""
+        time_match=$(echo "$test_line" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+        if [[ -z "$time_match" ]]; then
+            time_match=$(echo "$test_line" | grep -oE "(^|[[:space:]])[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/^[[:space:]]*//')
+        fi
+        if [[ -z "$time_match" ]]; then
+            time_match=$(echo "$test_line" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}" | awk '{print $2}')
+        fi
+        echo "Test: '$test_line' -> czas: '$time_match'"
+    done
+    info "=== KONIEC TESTÓW ==="
+fi
+
 echo
 
 # Główna pętla sprawdzania - ZOPTYMALIZOWANA
@@ -154,21 +188,61 @@ for log_file in "${TODAY_LOG_FILES[@]}"; do
             continue
         fi
         
-        # Wczytaj tylko linie z wzorcem i okoliczne - ZNACZNIE SZYBSZE
-        grep -n -A1 -B1 "$SUCCESS_PATTERN" "$log_file" | while IFS=':' read -r line_num line_content; do
-            # Pomiń separatory --
-            [[ "$line_num" == "--" ]] && continue
+        # Znajdź wszystkie linie z wzorcem wraz z numerami linii
+        local found_entries=0
+        while IFS=':' read -r line_num line_content; do
+            # Wyodrębnij czas z linii - sprawdź różne formaty
+            time_match=""
             
-            # Wyodrębnij czas z linii
-            time_match=$(echo "$line_content" | grep -oE "(At )?[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+            # Format 1: "At HH:MM:SS"
+            time_match=$(echo "$line_content" | grep -oE "At [0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/At //')
+            
+            # Format 2: samo "HH:MM:SS" na początku linii lub po dacie
+            if [[ -z "$time_match" ]]; then
+                time_match=$(echo "$line_content" | grep -oE "(^|[[:space:]])[0-9]{2}:[0-9]{2}:[0-9]{2}" | sed 's/^[[:space:]]*//')
+            fi
+            
+            # Format 3: data i czas "YYYY-MM-DD HH:MM:SS"
+            if [[ -z "$time_match" ]]; then
+                time_match=$(echo "$line_content" | grep -oE "[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+[0-9]{2}:[0-9]{2}:[0-9]{2}" | awk '{print $2}')
+            fi
+            
+            debug "Linia $line_num, czas: '$time_match', zawartość: '$line_content'"
             
             if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
                 echo -e "  ${GREEN}✓${NC} Znaleziono w linii $line_num: $time_match"
                 echo -e "    ${BLUE}Zawartość:${NC} $line_content"
                 ((file_success_count++))
-                ((total_success_entries++))
+                ((found_entries++))
+                echo
+            elif [[ -n "$time_match" ]]; then
+                debug "Czas $time_match nie jest w zakresie ostatniej godziny"
+            else
+                debug "Nie znaleziono czasu w linii: $line_content"
             fi
-        done
+        done < <(grep -n "$SUCCESS_PATTERN" "$log_file")
+        
+        # Sprawdź także pary linii - linia przed z czasem
+        while IFS=':' read -r line_num line_content; do
+            # Sprawdź linię przed
+            prev_line_num=$((line_num - 1))
+            if [[ $prev_line_num -gt 0 ]]; then
+                prev_line=$(sed -n "${prev_line_num}p" "$log_file")
+                time_match=$(echo "$prev_line" | grep -oE "[0-9]{2}:[0-9]{2}:[0-9]{2}")
+                
+                if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
+                    echo -e "  ${GREEN}✓${NC} Znaleziono w parze linii ${prev_line_num}-${line_num}: $time_match"
+                    echo -e "    ${BLUE}Linia z czasem:${NC} $prev_line"
+                    echo -e "    ${BLUE}Linia z wzorcem:${NC} $line_content"
+                    ((file_success_count++))
+                    ((found_entries++))
+                    echo
+                fi
+            fi
+        done < <(grep -n "$SUCCESS_PATTERN" "$log_file")
+        
+        # Zaktualizuj licznik globalny
+        total_success_entries=$((total_success_entries + found_entries))
         
         if [[ $file_success_count -gt 0 ]]; then
             ((files_with_success++))
