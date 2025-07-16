@@ -52,19 +52,19 @@
           Process Count: {{ process_count.stdout | default('0') }}
           System Uptime: {{ system_uptime.stdout | default('N/A') }}
           Check Time: {{ ansible_date_time.iso8601 }}
-          {% if process_status.stdout == 'RUNNING' %}
+          {% if process_status.stdout == 'RUNNING' -%}
           Process Details:
           {{ process_details.stdout | default('N/A') }}
-          {% endif %}
+          {% endif -%}
 
     - name: Create summary for this host
       debug:
-        msg: |
-          {% if process_status.stdout == 'RUNNING' %}
-          ✅ SUCCESS: BesClient is RUNNING on {{ inventory_hostname }}
-          {% else %}
-          ❌ WARNING: BesClient is NOT RUNNING on {{ inventory_hostname }}
-          {% endif %}
+        msg: >
+          {% if process_status.stdout == 'RUNNING' -%}
+          SUCCESS: BesClient is RUNNING on {{ inventory_hostname }}
+          {% else -%}
+          WARNING: BesClient is NOT RUNNING on {{ inventory_hostname }}
+          {% endif -%}
 
     - name: Create individual host report file
       copy:
@@ -85,12 +85,12 @@
           System Uptime: {{ system_uptime.stdout | default('N/A') }}
           Check Time: {{ ansible_date_time.iso8601 }}
           
-          {% if process_status.stdout == 'RUNNING' %}
+          {% if process_status.stdout == 'RUNNING' -%}
           PROCESS DETAILS:
           {{ process_details.stdout | default('No details available') }}
-          {% else %}
+          {% else -%}
           ISSUE: BesClient process is not running on this host!
-          {% endif %}
+          {% endif -%}
           
           =====================================================
         dest: "/tmp/besclient_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
@@ -98,5 +98,4 @@
 
     - name: Show report file location
       debug:
-        msg: |
-          📄 Individual report saved to: /tmp/besclient_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt
+        msg: "Individual report saved to: /tmp/besclient_{{ inventory_hostname }}_{{ ansible_date_time.epoch }}.txt"
