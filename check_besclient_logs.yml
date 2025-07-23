@@ -5,6 +5,7 @@
   vars:
     script_path: "/opt/scripts/check_processsh"  # Ścieżka do skryptu na zdalnym hoście
     debug_mode: "0"  # Ustaw na "1" aby włączyć tryb debug
+    local_reports_dir: "/home/marek/CODE/ansible-smieci/reports"  # Lokalny katalog na raporty
     
   tasks:
     - name: Check if script exists on remote host
@@ -55,3 +56,28 @@
           STDERR Output:
           {{ script_output.stderr }}
       when: script_output.stderr | length > 0
+
+    - name: Extract report file path from script output
+      set_fact:
+        report_file_path: "{{ script_output.stdout | regex_search('Raport zapisany w: (.+)', '\\1') | first }}"
+      when: script_output.stdout is defined and 'Raport zapisany w:' in script_output.stdout
+
+    - name: Create local reports directory
+      local_action:
+        module: file
+        path: "{{ local_reports_dir }}"
+        state: directory
+        mode: '0755'
+      run_once: true
+
+    - name: Copy report file to local machine
+      fetch:
+        src: "{{ report_file_path }}"
+        dest: "{{ local_reports_dir }}/{{ inventory_hostname }}_{{ report_file_path | basename }}"
+        flat: yes
+      when: report_file_path is defined and report_file_path | length > 0
+
+    - name: Display local report path
+      debug:
+        msg: "Raport skopiowany do: {{ local_reports_dir }}/{{ inventory_hostname }}_{{ report_file_path | basename }}"
+      when: report_file_path is defined and report_file_path | length > 0
