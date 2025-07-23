@@ -3,34 +3,27 @@
   hosts: all
   become: yes
   vars:
-    script_name: check_processsh
-    local_script_path: "/home/marek/CODE/ansible-smieci/{{ script_name }}"
-    remote_script_path: "/tmp/{{ script_name }}"
+    script_path: "/opt/scripts/check_processsh"  # Ścieżka do skryptu na zdalnym hoście
     debug_mode: "0"  # Ustaw na "1" aby włączyć tryb debug
     
   tasks:
-    - name: Check if local script exists
-      local_action:
-        module: stat
-        path: "{{ local_script_path }}"
-      register: local_script_stat
-      run_once: true
+    - name: Check if script exists on remote host
+      stat:
+        path: "{{ script_path }}"
+      register: remote_script_stat
 
-    - name: Fail if local script doesn't exist
+    - name: Fail if script doesn't exist on remote host
       fail:
-        msg: "Script {{ local_script_path }} not found!"
-      when: not local_script_stat.stat.exists
+        msg: "Script {{ script_path }} not found on {{ inventory_hostname }}!"
+      when: not remote_script_stat.stat.exists
 
-    - name: Copy script to remote host
-      copy:
-        src: "{{ local_script_path }}"
-        dest: "{{ remote_script_path }}"
+    - name: Ensure script is executable
+      file:
+        path: "{{ script_path }}"
         mode: '0755'
-        owner: root
-        group: root
 
     - name: Run BESClient log checker script
-      shell: "{{ remote_script_path }}"
+      shell: "{{ script_path }}"
       register: script_output
       changed_when: false
       failed_when: script_output.rc not in [0, 2, 3]
@@ -62,14 +55,3 @@
           STDERR Output:
           {{ script_output.stderr }}
       when: script_output.stderr | length > 0
-
-    - name: Clean up temporary script
-      file:
-        path: "{{ remote_script_path }}"
-        state: absent
-
-  handlers:
-    - name: cleanup script
-      file:
-        path: "{{ remote_script_path }}"
-        state: absent
