@@ -20,6 +20,10 @@ TODAY=$(date +%Y%m%d)
 CURRENT_HOUR=$(date +%H)
 CURRENT_MINUTE=$(date +%M)
 
+# Konfiguracja raportu
+REPORT_DIR="/var/log/besclient-reports"
+REPORT_FILE="${REPORT_DIR}/besclient_report_${TODAY}_$(date +%H%M%S).txt"
+
 # Opcja debugowania - ustaw na 1 żeby widzieć więcej szczegółów
 DEBUG=${DEBUG:-0}
 
@@ -50,6 +54,32 @@ debug() {
     if [[ $DEBUG -eq 1 ]]; then
         echo -e "${BLUE}[$(date '+%Y-%m-%d %H:%M:%S')] DEBUG:${NC} $1"
     fi
+}
+
+# Funkcja do zapisywania do raportu
+write_report() {
+    echo "$1" | tee -a "$REPORT_FILE"
+}
+
+# Funkcja do inicjalizacji raportu
+init_report() {
+    # Utwórz katalog dla raportów jeśli nie istnieje
+    mkdir -p "$REPORT_DIR"
+    
+    # Rozpocznij nowy raport
+    cat > "$REPORT_FILE" << EOF
+================================================================
+BESClient Log Checker Report
+================================================================
+Hostname: $(hostname)
+Generated: $(date '+%Y-%m-%d %H:%M:%S')
+Checking date: $TODAY
+Current time: $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)
+Log directory: $LOG_DIR
+Report file: $REPORT_FILE
+================================================================
+
+EOF
 }
 
 # Funkcja do konwersji czasu HH:MM:SS na minuty od północy - ZOPTYMALIZOWANA
@@ -93,33 +123,45 @@ echo "================================================================"
 info "Checking date: $TODAY"
 info "Current time: $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
 info "Log directory: $LOG_DIR"
+info "Report will be saved to: $REPORT_FILE"
 echo
+
+# Inicjalizuj raport
+init_report
 
 # Sprawdź czy katalog istnieje
 log "Sprawdzanie istnienia katalogu logów..."
+write_report "Sprawdzanie istnienia katalogu logów..."
 if [[ ! -d "$LOG_DIR" ]]; then
     error "Katalog $LOG_DIR nie istnieje!"
+    write_report "ERROR: Katalog $LOG_DIR nie istnieje!"
     exit 1
 fi
 log "Katalog logów istnieje: $LOG_DIR"
+write_report "Katalog logów istnieje: $LOG_DIR"
 
 # Znajdź pliki z dzisiejszą datą - ZOPTYMALIZOWANE
 log "Szukanie plików logów z datą $TODAY..."
+write_report "Szukanie plików logów z datą $TODAY..."
 readarray -t TODAY_LOG_FILES < <(find "$LOG_DIR" -name "${TODAY}*.log" -type f 2>/dev/null)
 
 if [[ ${#TODAY_LOG_FILES[@]} -eq 0 ]]; then
     error "Nie znaleziono żadnych plików logów z dzisiejszą datą (${TODAY}*.log)"
+    write_report "ERROR: Nie znaleziono żadnych plików logów z dzisiejszą datą (${TODAY}*.log)"
     exit 1
 fi
 
 log "Znalezione pliki logów z dzisiejszą datą: ${#TODAY_LOG_FILES[@]}"
+write_report "Znalezione pliki logów z dzisiejszą datą: ${#TODAY_LOG_FILES[@]}"
 for file in "${TODAY_LOG_FILES[@]}"; do
     if [[ -n "$file" ]]; then
         file_size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file" 2>/dev/null || echo "unknown")
         info "  - $(basename "$file") (${file_size} bajtów)"
+        write_report "  - $(basename "$file") (${file_size} bajtów)"
     fi
 done
 echo
+write_report ""
 
 # Oblicz zakres czasu dla ostatniej godziny
 CURRENT_MINUTES=$((CURRENT_HOUR * 60 + CURRENT_MINUTE))
@@ -139,6 +181,9 @@ START_MINUTE=$((START_MINUTES % 60))
 log "Sprawdzanie wpisów 'Report posted successfully' z ostatniej godziny..."
 info "Zakres czasowy: $(printf '%02d:%02d' $START_HOUR $START_MINUTE) - $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
 info "Wzorzec wyszukiwania: '$SUCCESS_PATTERN'"
+write_report "Sprawdzanie wpisów 'Report posted successfully' z ostatniej godziny..."
+write_report "Zakres czasowy: $(printf '%02d:%02d' $START_HOUR $START_MINUTE) - $(printf '%02d:%02d' $CURRENT_HOUR $CURRENT_MINUTE)"
+write_report "Wzorzec wyszukiwania: '$SUCCESS_PATTERN'"
 
 # Test kilku przykładowych formatów
 if [[ $DEBUG -eq 1 ]]; then
@@ -173,10 +218,12 @@ files_with_success=0
 for log_file in "${TODAY_LOG_FILES[@]}"; do
     if [[ -n "$log_file" && -f "$log_file" ]]; then
         info "Sprawdzanie pliku: $(basename "$log_file")"
+        write_report "Sprawdzanie pliku: $(basename "$log_file")"
         
         # Sprawdź czy plik nie jest pusty
         if [[ ! -s "$log_file" ]]; then
             warn "Plik $(basename "$log_file") jest pusty"
+            write_report "WARNING: Plik $(basename "$log_file") jest pusty"
             continue
         fi
         
@@ -185,6 +232,7 @@ for log_file in "${TODAY_LOG_FILES[@]}"; do
         # Użyj grep do szybkiego wstępnego filtrowania
         if ! grep -q "$SUCCESS_PATTERN" "$log_file"; then
             warn "Plik $(basename "$log_file"): brak wpisów 'Report posted successfully'"
+            write_report "WARNING: Plik $(basename "$log_file"): brak wpisów 'Report posted successfully'"
             continue
         fi
         
@@ -212,9 +260,12 @@ for log_file in "${TODAY_LOG_FILES[@]}"; do
             if [[ -n "$time_match" ]] && is_within_last_hour "$time_match"; then
                 echo -e "  ${GREEN}✓${NC} Znaleziono w linii $line_num: $time_match"
                 echo -e "    ${BLUE}Zawartość:${NC} $line_content"
+                write_report "  ✓ Znaleziono w linii $line_num: $time_match"
+                write_report "    Zawartość: $line_content"
                 ((file_success_count++))
                 ((found_entries++))
                 echo
+                write_report ""
             elif [[ -n "$time_match" ]]; then
                 debug "Czas $time_match nie jest w zakresie ostatniej godziny"
             else
@@ -234,9 +285,13 @@ for log_file in "${TODAY_LOG_FILES[@]}"; do
                     echo -e "  ${GREEN}✓${NC} Znaleziono w parze linii ${prev_line_num}-${line_num}: $time_match"
                     echo -e "    ${BLUE}Linia z czasem:${NC} $prev_line"
                     echo -e "    ${BLUE}Linia z wzorcem:${NC} $line_content"
+                    write_report "  ✓ Znaleziono w parze linii ${prev_line_num}-${line_num}: $time_match"
+                    write_report "    Linia z czasem: $prev_line"
+                    write_report "    Linia z wzorcem: $line_content"
                     ((file_success_count++))
                     ((found_entries++))
                     echo
+                    write_report ""
                 fi
             fi
         done < <(grep -n "$SUCCESS_PATTERN" "$log_file")
@@ -247,10 +302,13 @@ for log_file in "${TODAY_LOG_FILES[@]}"; do
         if [[ $file_success_count -gt 0 ]]; then
             ((files_with_success++))
             info "Plik $(basename "$log_file"): $file_success_count wpisów z ostatniej godziny"
+            write_report "Plik $(basename "$log_file"): $file_success_count wpisów z ostatniej godziny"
         else
             warn "Plik $(basename "$log_file"): brak wpisów z ostatniej godziny"
+            write_report "WARNING: Plik $(basename "$log_file"): brak wpisów z ostatniej godziny"
         fi
         echo
+        write_report ""
     fi
 done
 
@@ -263,17 +321,37 @@ log "Pliki logów z dzisiejszą datą: ${#TODAY_LOG_FILES[@]}"
 log "Pliki z wpisami 'Report posted successfully' z ostatniej godziny: $files_with_success"
 log "Łączna liczba wpisów 'Report posted successfully' z ostatniej godziny: $total_success_entries"
 
+# Zapisz podsumowanie do raportu
+write_report "================================================================"
+write_report "                    PODSUMOWANIE WYNIKÓW"
+write_report "================================================================"
+write_report "Pliki logów z dzisiejszą datą: ${#TODAY_LOG_FILES[@]}"
+write_report "Pliki z wpisami 'Report posted successfully' z ostatniej godziny: $files_with_success"
+write_report "Łączna liczba wpisów 'Report posted successfully' z ostatniej godziny: $total_success_entries"
+
 # Określ status końcowy
 if [[ ${#TODAY_LOG_FILES[@]} -eq 0 ]]; then
     error "BŁĄD: Brak plików logów z dzisiejszą datą"
+    write_report "BŁĄD: Brak plików logów z dzisiejszą datą"
+    write_report "Exit code: 1"
+    info "Raport zapisany w: $REPORT_FILE"
     exit 1
 elif [[ $total_success_entries -eq 0 ]]; then
     error "OSTRZEŻENIE: Brak wpisów 'Report posted successfully' z ostatniej godziny"
+    write_report "OSTRZEŻENIE: Brak wpisów 'Report posted successfully' z ostatniej godziny"
+    write_report "Exit code: 2"
+    info "Raport zapisany w: $REPORT_FILE"
     exit 2
 elif [[ $files_with_success -eq ${#TODAY_LOG_FILES[@]} ]]; then
     log "SUKCES: Wszystkie pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    write_report "SUKCES: Wszystkie pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    write_report "Exit code: 0"
+    info "Raport zapisany w: $REPORT_FILE"
     exit 0
 else
     warn "CZĘŚCIOWY SUKCES: Niektóre pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    write_report "CZĘŚCIOWY SUKCES: Niektóre pliki logów zawierają wpisy 'Report posted successfully' z ostatniej godziny"
+    write_report "Exit code: 3"
+    info "Raport zapisany w: $REPORT_FILE"
     exit 3
 fi
