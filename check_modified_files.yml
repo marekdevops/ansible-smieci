@@ -1,0 +1,50 @@
+---
+- name: Sprawdz pliki zmodyfikowane w ciagu ostatniego tygodnia
+  hosts: all
+  become: yes
+  become_method: sudo
+  
+  vars:
+    search_path: "/home"
+  
+  tasks:
+    - name: Sprawdz czy katalog istnieje
+      ansible.builtin.stat:
+        path: "{{ search_path }}"
+      register: path_check
+
+    - name: Zatrzymaj jesli katalog nie istnieje
+      ansible.builtin.fail:
+        msg: "Katalog {{ search_path }} nie istnieje na zdalnym hoscie!"
+      when: not path_check.stat.exists or not path_check.stat.isdir
+
+    - name: Znajdz pliki zmodyfikowane w ciagu ostatnich 7 dni
+      ansible.builtin.find:
+        paths: "{{ search_path }}"
+        age: -7d
+        age_stamp: mtime
+        recurse: yes
+        file_type: file
+      register: modified_files
+      ignore_errors: yes
+
+    - name: Wyswietl liczbe znalezionych plikow
+      ansible.builtin.debug:
+        msg: "Znaleziono {{ modified_files.files | length }} plikow zmodyfikowanych w ciagu ostatniego tygodnia"
+
+    - name: Wyswietl liste zmodyfikowanych plikow
+      ansible.builtin.debug:
+        msg: "{{ item.path }} - ostatnia modyfikacja: {{ item.mtime | int | ansible.builtin.strftime('%Y-%m-%d %H:%M:%S') }}"
+      loop: "{{ modified_files.files }}"
+      when: modified_files.files is defined
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Zapisz liste plikow do pliku na zdalnym hoscie
+      ansible.builtin.copy:
+        content: |
+          {% for file in modified_files.files %}
+          {{ file.path }} - {{ file.mtime | int | ansible.builtin.strftime('%Y-%m-%d %H:%M:%S') }}
+          {% endfor %}
+        dest: /tmp/modified_files_last_week.txt
+      when: modified_files.files is defined and modified_files.files | length > 0
