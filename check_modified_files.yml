@@ -34,7 +34,7 @@
 
     - name: Wyswietl liste zmodyfikowanych plikow
       ansible.builtin.debug:
-        msg: "{{ item.path }} - ostatnia modyfikacja: {{ item.mtime | int | ansible.builtin.strftime('%Y-%m-%d %H:%M:%S') }}"
+        msg: "{{ item.path }} - ostatnia modyfikacja: {{ '%Y-%m-%d %H:%M:%S' | strftime(item.mtime) }}"
       loop: "{{ modified_files.files }}"
       when: modified_files.files is defined
       loop_control:
@@ -44,7 +44,7 @@
       ansible.builtin.copy:
         content: |
           {% for file in modified_files.files %}
-          {{ file.path }} - {{ file.mtime | int | ansible.builtin.strftime('%Y-%m-%d %H:%M:%S') }}
+          {{ file.path }} - {{ '%Y-%m-%d %H:%M:%S' | strftime(file.mtime) }}
           {% endfor %}
         dest: /tmp/modified_files_last_week.txt
       when: modified_files.files is defined and modified_files.files | length > 0
