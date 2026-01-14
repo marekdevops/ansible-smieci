@@ -9,35 +9,31 @@
       set_fact:
         is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
 
-    - name: Weryfikacja obecności nadmiarowej linii w openssl.cnf
-      ansible.builtin.lineinfile:
-        path: /etc/pki/tls/openssl.cnf
-        line: ".include /etc/crypto-policies/back-ends/openssl.config"
-        state: present
-      check_mode: yes
-      register: old_include_check
+    - name: Sprawdzenie obecności starego include (openssl.config)
+      ansible.builtin.shell: "grep -q '^.include.*/openssl.config' /etc/pki/tls/openssl.cnf"
+      register: old_check
       failed_when: false
+      changed_when: false
 
-    - name: Weryfikacja obecności poprawnej linii opensslcnf.config
-      ansible.builtin.lineinfile:
-        path: /etc/pki/tls/openssl.cnf
-        line: ".include = /etc/crypto-policies/back-ends/opensslcnf.config"
-        state: present
-      check_mode: yes
-      register: new_include_check
+    - name: Sprawdzenie obecności nowego include (opensslcnf.config)
+      ansible.builtin.shell: "grep -q '^.include.*/opensslcnf.config' /etc/pki/tls/openssl.cnf"
+      register: new_check
       failed_when: false
+      changed_when: false
 
     - name: Klasyfikacja statusu hosta
       set_fact:
         host_status: >-
           {% if not is_rhel_9_7 %}
           Ignorowany (Wersja poniżej 9.7)
-          {% elif old_include_check.found and new_include_check.found %}
+          {% elif old_check.rc == 0 and new_check.rc == 0 %}
           ZAGROŻONY (Wykryto oba include - ryzyko błędu @SECLEVEL)
-          {% elif old_include_check.found and not new_include_check.found %}
+          {% elif old_check.rc == 0 and new_check.rc != 0 %}
           DO WERYFIKACJI (Tylko stary format include)
+          {% elif old_check.rc != 0 and new_check.rc == 0 %}
+          OK (Poprawna konfiguracja RHEL 9)
           {% else %}
-          OK (Poprawna konfiguracja)
+          NIEZNANY (Brak standardowych dyrektyw include)
           {% endif %}
 
     - name: Wyświetlenie raportu dla hosta
