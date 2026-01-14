@@ -9,42 +9,42 @@
       set_fact:
         is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
 
-    - name: Szukanie starego wpisu (openssl.config)
-      ansible.builtin.command: "grep -E '^\\.include.*/openssl\\.config' /etc/pki/tls/openssl.cnf"
-      register: grep_old
+    - name: Weryfikacja obecnosci starego wpisu (openssl.config)
+      ansible.builtin.command: "grep -E '^.include.*/openssl.config' /etc/pki/tls/openssl.cnf"
+      register: check_old
       failed_when: false
       changed_when: false
 
-    - name: Szukanie nowego wpisu (opensslcnf.config)
-      ansible.builtin.command: "grep -E '^\\.include.*/opensslcnf\\.config' /etc/pki/tls/openssl.cnf"
-      register: grep_new
+    - name: Weryfikacja obecnosci nowego wpisu (opensslcnf.config)
+      ansible.builtin.command: "grep -E '^.include.*/opensslcnf.config' /etc/pki/tls/openssl.cnf"
+      register: check_new
       failed_when: false
       changed_when: false
 
-    - name: Analiza statusu
+    - name: Klasyfikacja statusu
       set_fact:
-        audit_result: >-
+        host_audit_status: >-
           {% if not is_rhel_9_7 %}
           Ignorowany (Wersja {{ ansible_distribution_version }})
-          {% elif grep_old.rc == 0 and grep_new.rc == 0 %}
-          ZAGROŻONY (Wykryto zdublowany include - błąd @SECLEVEL prawdopodobny)
-          {% elif grep_old.rc == 0 and grep_new.rc != 0 %}
-          STARY_FORMAT (Tylko openssl.config - do sprawdzenia)
-          {% elif grep_old.rc != 0 and grep_new.rc == 0 %}
-          OK (Poprawny include dla RHEL 9.7)
+          {% elif check_old.rc == 0 and check_new.rc == 0 %}
+          ZAGROŻONY (Wykryto oba include - ryzyko błędu @SECLEVEL)
+          {% elif check_old.rc == 0 and check_new.rc != 0 %}
+          STARY_FORMAT (Tylko openssl.config)
+          {% elif check_old.rc != 0 and check_new.rc == 0 %}
+          OK (Poprawna konfiguracja RHEL 9.7)
           {% else %}
-          NIESTANDARDOWY (Brak automatycznych include-ów)
+          NIEZNANY (Brak standardowych wpisów include)
           {% endif %}
 
-    - name: Wynik dla hosta
+    - name: Wyswietlenie wyniku
       debug:
-        msg: "Host: {{ inventory_hostname }} | Status: {{ audit_result }}"
+        msg: "Host: {{ inventory_hostname }} | Status: {{ host_audit_status }}"
 
-    - name: Zapis do raportu zbiorczego
+    - name: Zapis raportu do pliku na maszynie lokalnej
       delegate_to: localhost
       become: no
       ansible.builtin.lineinfile:
-        path: "./raport_openssl_97.csv"
-        line: "{{ inventory_hostname }};{{ ansible_distribution_version }};{{ audit_result }}"
+        path: "./raport_openssl_rhel97.csv"
+        line: "{{ inventory_hostname }},{{ ansible_distribution_version }},{{ host_audit_status }}"
         create: yes
       run_once: false
