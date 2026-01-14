@@ -1,5 +1,5 @@
 ---
-- name: Raport podatności OpenSSL na błąd @SECLEVEL w RHEL 9.7
+- name: Audyt konfiguracji OpenSSL - RHEL 9.7
   hosts: all
   become: yes
   gather_facts: yes
@@ -9,42 +9,42 @@
       set_fact:
         is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
 
-    - name: Sprawdzenie obecności starego include (openssl.config)
-      ansible.builtin.shell: "grep -q '^.include.*/openssl.config' /etc/pki/tls/openssl.cnf"
-      register: old_check
+    - name: Szukanie starego wpisu (openssl.config)
+      ansible.builtin.command: "grep -E '^\\.include.*/openssl\\.config' /etc/pki/tls/openssl.cnf"
+      register: grep_old
       failed_when: false
       changed_when: false
 
-    - name: Sprawdzenie obecności nowego include (opensslcnf.config)
-      ansible.builtin.shell: "grep -q '^.include.*/opensslcnf.config' /etc/pki/tls/openssl.cnf"
-      register: new_check
+    - name: Szukanie nowego wpisu (opensslcnf.config)
+      ansible.builtin.command: "grep -E '^\\.include.*/opensslcnf\\.config' /etc/pki/tls/openssl.cnf"
+      register: grep_new
       failed_when: false
       changed_when: false
 
-    - name: Klasyfikacja statusu hosta
+    - name: Analiza statusu
       set_fact:
-        host_status: >-
+        audit_result: >-
           {% if not is_rhel_9_7 %}
-          Ignorowany (Wersja poniżej 9.7)
-          {% elif old_check.rc == 0 and new_check.rc == 0 %}
-          ZAGROŻONY (Wykryto oba include - ryzyko błędu @SECLEVEL)
-          {% elif old_check.rc == 0 and new_check.rc != 0 %}
-          DO WERYFIKACJI (Tylko stary format include)
-          {% elif old_check.rc != 0 and new_check.rc == 0 %}
-          OK (Poprawna konfiguracja RHEL 9)
+          Ignorowany (Wersja {{ ansible_distribution_version }})
+          {% elif grep_old.rc == 0 and grep_new.rc == 0 %}
+          ZAGROŻONY (Wykryto zdublowany include - błąd @SECLEVEL prawdopodobny)
+          {% elif grep_old.rc == 0 and grep_new.rc != 0 %}
+          STARY_FORMAT (Tylko openssl.config - do sprawdzenia)
+          {% elif grep_old.rc != 0 and grep_new.rc == 0 %}
+          OK (Poprawny include dla RHEL 9.7)
           {% else %}
-          NIEZNANY (Brak standardowych dyrektyw include)
+          NIESTANDARDOWY (Brak automatycznych include-ów)
           {% endif %}
 
-    - name: Wyświetlenie raportu dla hosta
+    - name: Wynik dla hosta
       debug:
-        msg: "Host: {{ inventory_hostname }} | Status: {{ host_status }}"
+        msg: "Host: {{ inventory_hostname }} | Status: {{ audit_result }}"
 
-    - name: Zapisanie wyników do lokalnego pliku raportu
+    - name: Zapis do raportu zbiorczego
       delegate_to: localhost
       become: no
-      lineinfile:
-        path: ./openssl_audit_report.txt
-        line: "{{ inventory_hostname }}, {{ ansible_distribution_version }}, {{ host_status }}"
+      ansible.builtin.lineinfile:
+        path: "./raport_openssl_97.csv"
+        line: "{{ inventory_hostname }};{{ ansible_distribution_version }};{{ audit_result }}"
         create: yes
       run_once: false
