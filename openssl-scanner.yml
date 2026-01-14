@@ -1,50 +1,49 @@
 ---
-- name: Audyt konfiguracji OpenSSL - RHEL 9.7
+- name: Audyt OpenSSL RHEL 9.7 - Bezpieczne sprawdzenie
   hosts: all
   become: yes
   gather_facts: yes
 
   tasks:
-    - name: Sprawdzenie wersji systemu
+    - name: Pobranie zawartosci pliku openssl.cnf
+      ansible.builtin.slurp:
+        src: /etc/pki/tls/openssl.cnf
+      register: openssl_file_encoded
+
+    - name: Dekodowanie zawartosci i analiza
       set_fact:
+        openssl_content: "{{ openssl_file_encoded.content | b64decode }}"
+
+    - name: Sprawdzenie obecnosci linii (wyszukiwanie tekstowe)
+      set_fact:
+        has_old_include: "{{ '/etc/crypto-policies/back-ends/openssl.config' in openssl_content }}"
+        has_new_include: "{{ '/etc/crypto-policies/back-ends/opensslcnf.config' in openssl_content }}"
         is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
 
-    - name: Weryfikacja obecnosci starego wpisu (openssl.config)
-      ansible.builtin.command: "grep -E '^.include.*/openssl.config' /etc/pki/tls/openssl.cnf"
-      register: check_old
-      failed_when: false
-      changed_when: false
-
-    - name: Weryfikacja obecnosci nowego wpisu (opensslcnf.config)
-      ansible.builtin.command: "grep -E '^.include.*/opensslcnf.config' /etc/pki/tls/openssl.cnf"
-      register: check_new
-      failed_when: false
-      changed_when: false
-
-    - name: Klasyfikacja statusu
+    - name: Wyznaczenie statusu koncowego
       set_fact:
-        host_audit_status: >-
+        final_status: >-
           {% if not is_rhel_9_7 %}
           Ignorowany (Wersja {{ ansible_distribution_version }})
-          {% elif check_old.rc == 0 and check_new.rc == 0 %}
-          ZAGROŻONY (Wykryto oba include - ryzyko błędu @SECLEVEL)
-          {% elif check_old.rc == 0 and check_new.rc != 0 %}
+          {% elif has_old_include and has_new_include %}
+          ZAGROŻONY (Wykryto zdublowany include)
+          {% elif has_old_include and not has_new_include %}
           STARY_FORMAT (Tylko openssl.config)
-          {% elif check_old.rc != 0 and check_new.rc == 0 %}
+          {% elif not has_old_include and has_new_include %}
           OK (Poprawna konfiguracja RHEL 9.7)
           {% else %}
-          NIEZNANY (Brak standardowych wpisów include)
+          NIEZNANY (Inna konfiguracja)
           {% endif %}
 
-    - name: Wyswietlenie wyniku
+    - name: Wynik w konsoli
       debug:
-        msg: "Host: {{ inventory_hostname }} | Status: {{ host_audit_status }}"
+        msg: "Serwer {{ inventory_hostname }} ma status: {{ final_status }}"
 
-    - name: Zapis raportu do pliku na maszynie lokalnej
+    - name: Zapis do raportu CSV
       delegate_to: localhost
       become: no
       ansible.builtin.lineinfile:
-        path: "./raport_openssl_rhel97.csv"
-        line: "{{ inventory_hostname }},{{ ansible_distribution_version }},{{ host_audit_status }}"
+        path: "./audyt_openssl_rhel97.csv"
+        line: "{{ inventory_hostname }};{{ ansible_distribution_version }};{{ final_status }}"
         create: yes
       run_once: false
