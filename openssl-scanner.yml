@@ -1,0 +1,54 @@
+---
+- name: Raport podatności OpenSSL na błąd @SECLEVEL w RHEL 9.7
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Sprawdzenie wersji systemu
+      set_fact:
+        is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
+
+    - name: Weryfikacja obecności nadmiarowej linii w openssl.cnf
+      ansible.builtin.lineinfile:
+        path: /etc/pki/tls/openssl.cnf
+        line: ".include /etc/crypto-policies/back-ends/openssl.config"
+        state: present
+      check_mode: yes
+      register: old_include_check
+      failed_when: false
+
+    - name: Weryfikacja obecności poprawnej linii opensslcnf.config
+      ansible.builtin.lineinfile:
+        path: /etc/pki/tls/openssl.cnf
+        line: ".include = /etc/crypto-policies/back-ends/opensslcnf.config"
+        state: present
+      check_mode: yes
+      register: new_include_check
+      failed_when: false
+
+    - name: Klasyfikacja statusu hosta
+      set_fact:
+        host_status: >-
+          {% if not is_rhel_9_7 %}
+          Ignorowany (Wersja poniżej 9.7)
+          {% elif old_include_check.found and new_include_check.found %}
+          ZAGROŻONY (Wykryto oba include - ryzyko błędu @SECLEVEL)
+          {% elif old_include_check.found and not new_include_check.found %}
+          DO WERYFIKACJI (Tylko stary format include)
+          {% else %}
+          OK (Poprawna konfiguracja)
+          {% endif %}
+
+    - name: Wyświetlenie raportu dla hosta
+      debug:
+        msg: "Host: {{ inventory_hostname }} | Status: {{ host_status }}"
+
+    - name: Zapisanie wyników do lokalnego pliku raportu
+      delegate_to: localhost
+      become: no
+      lineinfile:
+        path: ./openssl_audit_report.txt
+        line: "{{ inventory_hostname }}, {{ ansible_distribution_version }}, {{ host_status }}"
+        create: yes
+      run_once: false
