@@ -7,3 +7,10 @@ for f in cert*.tmp; do
 done
 
 openssl crl2pkcs7 -nocrl -certfile twoj_plik.pem | openssl pkcs7 -print_certs -text | grep -E "Subject:|Issuer:"
+
+
+# Sprawdź dokładnie jak przekazywany jest argument do JVM
+oc exec <pod> -n <ns> -- cat /proc/1/cmdline | tr '\0' '\n' | grep -iE "trust|ssl|javax"
+
+# Sprawdź zmienne środowiskowe — może JAVA_OPTS jest ale inaczej nazwany
+oc exec <pod> -n <ns> -- env | grep -iE "java|jvm|opt|trust"
