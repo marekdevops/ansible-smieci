@@ -1,0 +1,4 @@
+hostname;wersja;status
+{% for host in groups['all'] %}
+{{ host }};{{ hostvars[host].ansible_distribution_version }};{{ hostvars[host].final_status }}
+{% endfor %}

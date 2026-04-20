@@ -1,0 +1,41 @@
+---
+- name: Audyt OpenSSL RHEL 9.7 - Bezpieczne sprawdzenie
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  tasks:
+    - name: Pobranie zawartosci pliku openssl.cnf
+      ansible.builtin.slurp:
+        src: /etc/pki/tls/openssl.cnf
+      register: openssl_file_encoded
+
+    - name: Analiza i wyznaczenie statusu
+      set_fact:
+        openssl_content: "{{ openssl_file_encoded.content | b64decode }}"
+        is_rhel_9_7: "{{ ansible_distribution == 'RedHat' and ansible_distribution_version is version('9.7', '>=') }}"
+
+    - name: Wyznaczenie statusu koncowego
+      set_fact:
+        final_status: >-
+          {% set has_old = '/etc/crypto-policies/back-ends/openssl.config' in openssl_content %}
+          {% set has_new = '/etc/crypto-policies/back-ends/opensslcnf.config' in openssl_content %}
+          {% if not is_rhel_9_7 %}Ignorowany (Wersja {{ ansible_distribution_version }})
+          {% elif has_old and has_new %}ZAGROŻONY (Wykryto zdublowany include)
+          {% elif has_old and not has_new %}STARY_FORMAT (Tylko openssl.config)
+          {% elif not has_old and has_new %}OK (Poprawna konfiguracja RHEL 9.7)
+          {% else %}NIEZNANY (Inna konfiguracja){% endif %}
+
+    - name: Wynik w konsoli
+      debug:
+        msg: "Serwer {{ inventory_hostname }} ma status: {{ final_status }}"
+
+- name: Generowanie raportu CSV
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Generowanie raportu CSV
+      ansible.builtin.template:
+        src: templates/raport_openssl.csv.j2
+        dest: "./audyt_openssl_rhel97.csv"

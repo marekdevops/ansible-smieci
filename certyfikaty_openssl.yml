@@ -1,0 +1,9 @@
+awk 'BEGIN {c=0} /BEGIN CERTIFICATE/ {c++} {print > "cert" c ".tmp"}' twoj_plik.pem
+
+for f in cert*.tmp; do
+    echo "--- Plik: $f ---"
+    openssl x509 -noout -subject -issuer -in "$f"
+    rm "$f"
+done
+
+openssl crl2pkcs7 -nocrl -certfile twoj_plik.pem | openssl pkcs7 -print_certs -text | grep -E "Subject:|Issuer:"
