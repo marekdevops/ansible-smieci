@@ -14,3 +14,11 @@ oc exec <pod> -n <ns> -- cat /proc/1/cmdline | tr '\0' '\n' | grep -iE "trust|ss
 
 # Sprawdź zmienne środowiskowe — może JAVA_OPTS jest ale inaczej nazwany
 oc exec <pod> -n <ns> -- env | grep -iE "java|jvm|opt|trust"
+
+
+# Utwórz pustą configmapę z właściwym labelem
+oc create configmap ca-bundle -n <app-namespace>
+
+oc label configmap ca-bundle \
+  config.openshift.io/inject-trusted-cabundle=true \
+  -n <app-namespace>
